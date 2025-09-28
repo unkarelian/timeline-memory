@@ -1,0 +1,11 @@
+{
+    "display_name": "Timeline Memory",
+    "loading_order": 9,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Karelian",
+    "version": "2.3.0",
+    "homePage": "https://github.com/unkarelian/timeline-memory"
+}

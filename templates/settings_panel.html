@@ -1,0 +1,93 @@
+<div class="rmr-extension-settings">
+	<div class="inline-drawer">
+		<div class="inline-drawer-toggle inline-drawer-header">
+			<b>Timeline Memory</b>
+			<div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+		</div>
+		<div class="inline-drawer-content">
+			<h4>General Settings</h4>
+			<div class="rmr-extension_block">
+				<label class="checkbox_label" for="rmr_tools_enabled">
+					<input id="rmr_tools_enabled" class="checkbox" type="checkbox" />
+					Enable Tool/Function Calls for Chapter Queries
+				</label>
+			</div>
+			<hr>
+			<h4>Message Buttons</h4>
+			<div class="rmr-extension_block">
+				<label class="checkbox_label" for="rmr_chapter_button">
+					<span class="rmr-button fa-solid fa-fw fa-circle-stop"></span>
+					<input id="rmr_chapter_button" class="checkbox" type="checkbox" />
+					End Chapter
+				</label>
+			</div>
+			<hr>
+			<h4>API Connection Profiles</h4>
+			<div class="rmr-extension_block">
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_profile">
+							<small>Summarization Profile</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_profile">
+							<option value="">-- No Override --</option>
+						</select>
+					</div>
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_query_profile">
+							<small>Chapter Query Profile</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_query_profile">
+						</select>
+					</div>
+				</div>
+				<label for="rmr_rate_limit">
+					<span>Max Requests per Minute</span>
+					<input class="text_pole widthUnset" id="rmr_rate_limit" type="number">
+				</label>
+			</div>
+			<hr>
+			<h4>Prompts</h4>
+			<div class="rmr-extension_block flex-container flexFlowColumn">
+				<div title="System prompt for chapter summarization." class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_memory_system_prompt">
+						<small>Chapter Summary System Prompt</small>
+					</label>
+					<textarea placeholder="System-level instructions for summarization (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
+				</div>
+				<div title="The prompt appended to a section of message history when generating a summary." class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_memory_prompt_template">
+						<small>Chapter Summary User Prompt</small>
+					</label>
+					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
+				</div>
+				<hr class="sysHR">
+				<div title="System prompt for chapter queries." class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_chapter_query_system_prompt">
+						<small>Chapter Query System Prompt</small>
+					</label>
+					<textarea placeholder="System-level instructions for chapter queries (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_chapter_query_system_prompt"></textarea>
+				</div>
+				<div title="The prompt used when querying a specific chapter with a question." class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_chapter_query_prompt_template">
+						<small>Chapter Query User Prompt</small>
+					</label>
+					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_chapter_query_prompt_template"></textarea>
+				</div>
+			</div>
+			<hr>
+			<h4>Chapter Settings</h4>
+			<div class="rmr-extension_block">
+				<label class="checkbox_label" for="rmr_hide_chapter">
+					<input id="rmr_hide_chapter" class="checkbox" type="checkbox" />
+					Hide Summarized Messages
+				</label>
+				<label class="checkbox_label" for="rmr_add_chunk_summaries">
+					<input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox" />
+					Add chunk summaries (when there are more than one) as comment
+				</label>
+			</div>
+			<hr>
+		</div>
+	</div>
+</div>
