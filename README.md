@@ -12,7 +12,7 @@ A reworked SillyTavern extension for creating a timeline of summarized chapters 
 
 ## Installation
 
-Install like any other SillyTavern extension, with the Github link: `https://github.com/InspectorCaracal/timeline-memory`
+Install like any other SillyTavern extension, with the Github link: `https://github.com/unkarelian/timeline-memory`
 
 ## Usage
 
