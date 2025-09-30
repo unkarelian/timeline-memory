@@ -96,6 +96,13 @@ Migrate old timeline entries to the new format by removing timestamps. Use this 
 Get the summary of a specific chapter from the timeline
 - `n`: Chapter number (required, 1-based)
 
+### `/resummarize chapter={n}`
+Regenerate the stored summary for an existing chapter without changing its position in the timeline
+- `chapter`: Chapter number to re-summarize (required, 1-based)
+- Named arguments:
+  - `profile`: Connection profile override for the regeneration request
+  - `quiet`: Suppress toast notifications while the command runs
+
 ### `/remove-reasoning {range}`
 Remove reasoning/thinking blocks from assistant messages in the specified range
 - `range`: Single ID (e.g., `5`) or range (`1-10`)

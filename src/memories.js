@@ -1035,85 +1035,101 @@ export async function queryChapters(startChapter, endChapter, query) {
 	throw new Error('No connection profile specified for query');
 }
 
-async function generateChapterSummary(mes_id) {
-	const chat = getContext().chat;
-	// slice to just the history from this message
-	// slice to messages since the last chapter end, if there was one
-	let last_end = chat.slice(0, mes_id+1).findLastIndex((it) => it.extra.rmr_chapter);
-	if (last_end < 0) { last_end = 0; }
-	const memory_history = await processMessageSlice(mes_id, 0, last_end);
+async function summarizeHistoryEntries(message_history, { targetMessageId, hideAfter = false } = {}) {
+	if (!Array.isArray(message_history) || message_history.length === 0) {
+		oopsToast("No visible chapter content! Skipping summary.");
+		return "";
+	}
 
-	const max_tokens = getContext().maxContext - 100; // take out padding for the instructions
+	const max_tokens = getContext().maxContext - 100; // reserve space for instructions
 	const getTokenCount = getContext().getTokenCountAsync;
 
 	let chunks = [];
 	let current = "";
-	for (const mes of memory_history) {
-		const mes_text = `${mes.name}: ${mes.mes}`;
-		const next_text = current+"\n\n"+mes_text;
-		const tokens = await getTokenCount(current+mes_text);
-		if (tokens > max_tokens) {
+	for (const mes of message_history) {
+		const speaker = mes?.name ?? '';
+		const content = mes?.mes ?? '';
+		const mes_text = speaker.length ? `${speaker}: ${content}` : content;
+		const next_text = current ? `${current}\n\n${mes_text}` : mes_text;
+		const tokens = await getTokenCount((current || "") + mes_text);
+		if (tokens > max_tokens && current.length) {
 			chunks.push(current);
 			current = mes_text;
+		} else if (tokens > max_tokens) {
+			// chunk would overflow even on first message; push as-is to avoid infinite loop
+			chunks.push(mes_text);
+			current = "";
 		} else {
 			current = next_text;
 		}
 	}
 	if (current.length) chunks.push(current);
+
 	let final_context;
-	if (chunks.length == 1) {
+	if (chunks.length === 1) {
 		final_context = chunks[0];
-	}
-	else if (chunks.length > 1) {
+	} else if (chunks.length > 1) {
 		infoToast(`Generating summaries for ${chunks.length} chunks....`);
-		let chunk_sums = [];
+		const chunk_sums = [];
 		let cid = 0;
 		while (cid < chunks.length) {
-			const chunk_sum = await genSummaryWithSlash(chunks[cid], Number(cid)+1);
+			const chunk_sum = await genSummaryWithSlash(chunks[cid], Number(cid) + 1);
 			if (chunk_sum.length > 0) {
 				chunk_sums.push(chunk_sum);
 				cid++;
 			} else {
-				// popup
-		    const result = await getContext().Popup.show.text(
+				const result = await getContext().Popup.show.text(
 					"Timeline Memory",
-					"There was an error generating a summary for chunk #"+Number(cid)+1,
-					{okButton: 'Retry', cancelButton: 'Cancel'});
-		    if (result != 1) return "";
+					"There was an error generating a summary for chunk #" + (Number(cid) + 1),
+					{ okButton: 'Retry', cancelButton: 'Cancel' });
+				if (result !== 1) return "";
 			}
 		}
-		// now we have a summary for each chunk, we need to combine them
 		final_context = chunk_sums.join("\n\n");
-		if (settings.add_chunk_summaries) {
-			await runSlashCommand(`/comment at=${mes_id+1} <details class="rmr-summary-chunks"><summary>Chunk Summaries</summary>${final_context}</details>`)
+		if (settings.add_chunk_summaries && targetMessageId !== undefined) {
+			await runSlashCommand(`/comment at=${targetMessageId + 1} <details class="rmr-summary-chunks"><summary>Chunk Summaries</summary>${final_context}</details>`);
 		}
-	}
-	else {
+	} else {
 		oopsToast("No visible chapter content! Skipping summary.");
 		return "";
 	}
-	if (final_context.length > 0) {
-		infoToast("Generating chapter summary....");
-		const result = await genSummaryWithSlash(final_context);
-		// at this point we have a history that we've successfully summarized
-		// if chapter hiding is on, we want to hide all the messages we summarized, now
-		debug(settings.hide_chapter, memory_history);
-		if (settings.hide_chapter) {
-			for (const mes of memory_history) {
-				chat[mes.index].is_system = true;
-				// Also toggle "hidden" state for all visible messages
-				const mes_elem = $(`.mes[mesid="${mes.index}"]`);
-				debug(mes_elem);
-				if (mes_elem.length) mes_elem.attr('is_system', 'true');
-			}
-			getContext().saveChat();
-		}
-		return result;
-	} else {
+
+	if (!final_context?.length) {
 		oopsToast("No final content - skipping summary.");
 		return "";
 	}
 
+	infoToast("Generating chapter summary....");
+	const result = await genSummaryWithSlash(final_context);
+	const trimmedResult = typeof result === 'string' ? result.trim() : '';
+
+	if (trimmedResult.length > 0 && hideAfter && settings.hide_chapter) {
+		const chat = getContext().chat;
+		for (const mes of message_history) {
+			if (mes?.index === undefined) continue;
+			chat[mes.index].is_system = true;
+			const mes_elem = $(`.mes[mesid="${mes.index}"]`);
+			if (mes_elem.length) mes_elem.attr('is_system', 'true');
+		}
+		getContext().saveChat();
+	}
+
+	if (!trimmedResult.length) {
+		oopsToast("No final content - skipping summary.");
+	}
+
+	return trimmedResult;
+}
+
+async function generateChapterSummary(mes_id) {
+	const chat = getContext().chat;
+	// slice to just the history from this message
+	// slice to messages since the last chapter end, if there was one
+	let last_end = chat.slice(0, mes_id + 1).findLastIndex((it) => it.extra.rmr_chapter);
+	if (last_end < 0) { last_end = 0; }
+	const memory_history = await processMessageSlice(mes_id, 0, last_end);
+
+	return await summarizeHistoryEntries(memory_history, { targetMessageId: mes_id, hideAfter: true });
 }
 
 // Simplified chapter summarization - just creates a summary
@@ -1146,6 +1162,61 @@ export async function summarizeChapter(message, options={}) {
 // Alias for backward compatibility
 export async function endChapter(message, options={}) {
 	return summarizeChapter(message, options);
+}
+
+export async function resummarizeChapter(chapterNumber, options = {}) {
+	commandArgs = options;
+	loadTimelineData();
+	if (!timelineData || timelineData.length === 0) {
+		oopsToast("No chapters available to re-summarize.");
+		return "";
+	}
+
+	if (chapterNumber < 1 || chapterNumber > timelineData.length) {
+		errorToast(`Chapter ${chapterNumber} not found.`);
+		return "";
+	}
+
+	const chapterIndex = chapterNumber - 1;
+	const chapter = timelineData[chapterIndex];
+	const chat = getContext().chat;
+
+	const startIdx = chapter.startMsgId === 0 ? 0 : chapter.startMsgId + 1;
+	const endIdx = chapter.endMsgId;
+	if (endIdx >= chat.length) {
+		errorToast(`Chapter ${chapterNumber} references messages that are no longer available.`);
+		return "";
+	}
+
+	const rawHistory = chat.slice(startIdx, endIdx + 1);
+	if (!rawHistory.length) {
+		oopsToast("No visible chapter content! Skipping summary.");
+		return "";
+	}
+
+	const processedHistory = await Promise.all(rawHistory.map(async (message, offset) => {
+		const absoluteIndex = startIdx + offset;
+		let placement = message.is_user ? regex_placement.USER_INPUT : regex_placement.AI_OUTPUT;
+		const depth = Math.max(0, chat.length - absoluteIndex - 1);
+		const options = { isPrompt: true, depth };
+		const original = message?.mes ?? '';
+		const mes_text = message.is_system ? original : getRegexedString(original, placement, options);
+		return {
+			...message,
+			mes: mes_text,
+			index: absoluteIndex,
+		};
+	}));
+
+	const summary = await summarizeHistoryEntries(processedHistory, { targetMessageId: endIdx, hideAfter: false });
+	if (!summary.length) {
+		return "";
+	}
+
+	timelineData[chapterIndex].summary = summary;
+	saveTimelineData();
+	doneToast(`Chapter ${chapterNumber} summary updated.`);
+	return summary;
 }
 
 // Removed lorebook functionality - these functions are no longer needed

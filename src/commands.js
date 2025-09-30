@@ -3,7 +3,7 @@ import { commonEnumProviders } from '../../../../slash-commands/SlashCommandComm
 import { enumTypes, SlashCommandEnumValue } from "../../../../slash-commands/SlashCommandEnumValue.js";
 import { saveChatConditional, reloadCurrentChat, systemUserName } from "../../../../../script.js";
 import { stringToRange } from "../../../../utils.js";
-import { endChapter, queryChapter, queryChapters, loadTimelineData, removeChapterFromTimeline, migrateTimelineData, getChapterSummary } from "./memories.js";
+import { endChapter, queryChapter, queryChapters, loadTimelineData, removeChapterFromTimeline, migrateTimelineData, getChapterSummary, resummarizeChapter } from "./memories.js";
 import { settings } from "./settings.js";
 import { debug } from "./logging.js";
 import { toggleChapterHighlight } from "./messages.js";
@@ -519,6 +519,51 @@ export function loadSlashCommands() {
 			}),
 		],
 		helpString: 'Get the summary of a specific chapter from the timeline.',
+	}));
+
+	parser.addCommandObject(command.fromProps({
+		name: 'resummarize',
+		callback: async (args) => {
+			if (!args.chapter) {
+				toastr.error('Chapter number is required', 'Timeline Memory');
+				return '';
+			}
+
+			const chapterNumber = parseInt(args.chapter);
+			if (isNaN(chapterNumber)) {
+				toastr.error('Invalid chapter number', 'Timeline Memory');
+				return '';
+			}
+
+			if (args.profile !== undefined) {
+				args.profile = profileIdFromName(args.profile);
+			}
+
+			loadTimelineData();
+			const summary = await resummarizeChapter(chapterNumber, args);
+			return summary;
+		},
+		namedArgumentList: [
+			namedArg.fromProps({
+				name: 'chapter',
+				description: 'Chapter number to re-summarize (1-based)',
+				typeList: [arg_types.NUMBER],
+				isRequired: true,
+			}),
+			namedArg.fromProps({
+				name: 'profile',
+				description: 'Name of a connection profile to override the current one',
+				enumProvider: profilesProvider,
+				isRequired: false,
+			}),
+			namedArg.fromProps({
+				name: 'quiet',
+				description: 'Suppress toast notifications for this command',
+				typeList: [arg_types.BOOLEAN],
+				isRequired: false,
+			}),
+		],
+		helpString: 'Regenerate the summary for an existing chapter without altering its position in the timeline.',
 	}));
 
 	parser.addCommandObject(command.fromProps({
