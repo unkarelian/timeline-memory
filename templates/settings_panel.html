@@ -47,6 +47,42 @@
 				</label>
 			</div>
 			<hr>
+			<h4>Presets</h4>
+			<div class="rmr-extension_block">
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_summarize_preset">
+							<small>Summarization Preset</small>
+						</label>
+						<div class="preset-row">
+							<select class="text_pole widthNatural" id="rmr_summarize_preset">
+								<option value="">-- Custom --</option>
+							</select>
+							<div class="preset-buttons">
+								<button type="button" class="menu_button" id="rmr_save_summarize_preset">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_summarize_preset">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_summarize_preset">Delete</button>
+							</div>
+						</div>
+					</div>
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_query_preset">
+							<small>Query Preset</small>
+						</label>
+						<div class="preset-row">
+							<select class="text_pole widthNatural" id="rmr_query_preset">
+								<option value="">-- Custom --</option>
+							</select>
+							<div class="preset-buttons">
+								<button type="button" class="menu_button" id="rmr_save_query_preset">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_query_preset">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_query_preset">Delete</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<hr>
 			<h4>Prompts</h4>
 			<div class="rmr-extension_block flex-container flexFlowColumn">
 				<div title="System prompt for chapter summarization." class="flex-container flex1 flexFlowColumn">
@@ -91,3 +127,31 @@
 		</div>
 	</div>
 </div>
+
+<style>
+.preset-row {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.preset-buttons {
+	display: flex;
+	gap: 5px;
+	margin-top: 5px;
+}
+
+.preset-buttons button {
+	font-size: 12px;
+	padding: 4px 8px;
+}
+
+.preset-buttons button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.rmr-extension_block select.text_pole {
+	margin-bottom: 5px;
+}
+</style>

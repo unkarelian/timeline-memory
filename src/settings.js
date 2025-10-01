@@ -45,6 +45,11 @@ Based on the chapter content above, please answer the user's query.`,
 	"hide_chapter": true, // hide messages after summarizing the chapter
 	"add_chunk_summaries": false, // add a comment containing all of the individual chunk summaries
 	"chapter_end_mode": ChapterEndMode.NONE, // whether final summary is added as a chat message or memory book entry
+	// preset settings
+	"summarize_presets": [],
+	"query_presets": [],
+	"current_summarize_preset": null,
+	"current_query_preset": null,
 }
 
 function toggleCheckboxSetting(event) {
@@ -254,7 +259,188 @@ async function loadSettingsUI() {
 		$(elem).on('change', handleStringValueChange);
 	});
 
+	// Initialize preset UI
+	loadPresetUI();
+
 	debug('Settings UI loaded');
+}
+
+function loadPresetUI() {
+	// Load summarize presets
+	reloadPresetOptions('summarize');
+
+	// Load query presets
+	reloadPresetOptions('query');
+
+	// Set current preset selections
+	$('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
+	$('#rmr_query_preset').val(settings.current_query_preset || '');
+
+	// Handle preset selection changes
+	$('#rmr_summarize_preset').on('change', function() {
+		const presetId = $(this).val();
+		if (presetId) {
+			applyPreset('summarize', presetId);
+			updatePresetButtons('summarize', presetId);
+			// Refresh UI to show loaded values
+			refreshPromptFields();
+		} else {
+			// Custom mode - clear preset
+			settings.current_summarize_preset = null;
+			getContext().saveSettingsDebounced();
+			updatePresetButtons('summarize', null);
+		}
+	});
+
+	$('#rmr_query_preset').on('change', function() {
+		const presetId = $(this).val();
+		if (presetId) {
+			applyPreset('query', presetId);
+			updatePresetButtons('query', presetId);
+			// Refresh UI to show loaded values
+			refreshPromptFields();
+		} else {
+			// Custom mode - clear preset
+			settings.current_query_preset = null;
+			getContext().saveSettingsDebounced();
+			updatePresetButtons('query', null);
+		}
+	});
+
+	// Handle preset save/update/delete buttons
+	$('#rmr_save_summarize_preset').on('click', () => handleSavePreset('summarize'));
+	$('#rmr_update_summarize_preset').on('click', () => handleUpdatePreset('summarize'));
+	$('#rmr_delete_summarize_preset').on('click', () => handleDeletePreset('summarize'));
+
+	$('#rmr_save_query_preset').on('click', () => handleSavePreset('query'));
+	$('#rmr_update_query_preset').on('click', () => handleUpdatePreset('query'));
+	$('#rmr_delete_query_preset').on('click', () => handleDeletePreset('query'));
+
+	// Update initial button states
+	updatePresetButtons('summarize', settings.current_summarize_preset);
+	updatePresetButtons('query', settings.current_query_preset);
+}
+
+function reloadPresetOptions(presetType) {
+	const selectId = presetType === 'summarize' ? '#rmr_summarize_preset' : '#rmr_query_preset';
+	const select = $(selectId);
+	const currentVal = select.val();
+
+	// Clear existing options except "Custom"
+	select.find('option:not([value=""])').remove();
+
+	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+	presets.forEach(preset => {
+		select.append(
+			$('<option></option>')
+				.attr('value', preset.id)
+				.text(preset.name)
+		);
+	});
+
+	// Restore selection if it still exists
+	select.val(currentVal);
+}
+
+function updatePresetButtons(presetType, presetId) {
+	const hasPreset = Boolean(presetId);
+	const updateButton = presetType === 'summarize' ? '#rmr_update_summarize_preset' : '#rmr_update_query_preset';
+	const deleteButton = presetType === 'summarize' ? '#rmr_delete_summarize_preset' : '#rmr_delete_query_preset';
+
+	$(updateButton).prop('disabled', !hasPreset);
+	$(deleteButton).prop('disabled', !hasPreset);
+}
+
+function refreshPromptFields() {
+	// Refresh all prompt field values from settings
+	$('#rmr_memory_system_prompt').val(settings.memory_system_prompt);
+	$('#rmr_memory_prompt_template').val(settings.memory_prompt_template);
+	$('#rmr_chapter_query_system_prompt').val(settings.chapter_query_system_prompt);
+	$('#rmr_chapter_query_prompt_template').val(settings.chapter_query_prompt_template);
+	$('#rmr_profile').val(settings.profile || '');
+	$('#rmr_query_profile').val(settings.query_profile || '');
+	$('#rmr_rate_limit').val(settings.rate_limit);
+}
+
+function handleSavePreset(presetType) {
+	const preset = createPresetFromCurrentSettings(presetType);
+	if (preset) {
+		reloadPresetOptions(presetType);
+		const selectId = presetType === 'summarize' ? '#rmr_summarize_preset' : '#rmr_query_preset';
+		$(selectId).val(preset.id);
+
+		if (presetType === 'summarize') {
+			settings.current_summarize_preset = preset.id;
+		} else {
+			settings.current_query_preset = preset.id;
+		}
+
+		updatePresetButtons(presetType, preset.id);
+		getContext().saveSettingsDebounced();
+		toastr.success(`${presetType} preset saved successfully.`);
+	}
+}
+
+function handleUpdatePreset(presetType) {
+	const currentPresetId = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+
+	if (!currentPresetId) {
+		toastr.warning(`No ${presetType} preset selected to update.`);
+		return;
+	}
+
+	let systemPrompt, userPrompt, profile, rateLimit;
+
+	if (presetType === 'summarize') {
+		systemPrompt = settings.memory_system_prompt;
+		userPrompt = settings.memory_prompt_template;
+		profile = settings.profile;
+		rateLimit = settings.rate_limit;
+	} else if (presetType === 'query') {
+		systemPrompt = settings.chapter_query_system_prompt;
+		userPrompt = settings.chapter_query_prompt_template;
+		profile = settings.query_profile;
+		rateLimit = 0;
+	}
+
+	const updated = updatePreset(presetType, currentPresetId, {
+		systemPrompt,
+		userPrompt,
+		profile,
+		rateLimit
+	});
+
+	if (updated) {
+		toastr.success(`${presetType} preset updated successfully.`);
+	} else {
+		toastr.error(`Failed to update ${presetType} preset.`);
+	}
+}
+
+function handleDeletePreset(presetType) {
+	const currentPresetId = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+
+	if (!currentPresetId) {
+		toastr.warning(`No ${presetType} preset selected to delete.`);
+		return;
+	}
+
+	const preset = findPresetById(presetType, currentPresetId);
+	const confirmed = confirm(`Are you sure you want to delete the "${preset.name}" ${presetType} preset?`);
+
+	if (!confirmed) return;
+
+	const deleted = deletePreset(presetType, currentPresetId);
+
+	if (deleted) {
+		reloadPresetOptions(presetType);
+		const selectId = presetType === 'summarize' ? '#rmr_summarize_preset' : '#rmr_query_preset';
+		$(selectId).val('');
+		updatePresetButtons(presetType, null);
+		toastr.success(`${presetType} preset deleted successfully.`);
+	} else {
+		toastr.error(`Failed to delete ${presetType} preset.`);
+	}
 }
 
 // Removed book selector as we no longer save to lorebooks
@@ -315,4 +501,130 @@ ${settings.keywords_prompt}`;
 
 export function changeCharaName(old_key, new_key) {
 	// No longer needed as we don't track book assignments
+}
+
+function generatePresetId() {
+	return `preset-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+}
+
+export function getSummarizePresets() {
+	return settings.summarize_presets || [];
+}
+
+export function getQueryPresets() {
+	return settings.query_presets || [];
+}
+
+export function findPresetById(presetType, presetId) {
+	if (!presetId) return null;
+	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+	return presets.find(preset => preset.id === presetId) || null;
+}
+
+export function createPreset(presetType, name, systemPrompt, userPrompt, profile, rateLimit) {
+	const preset = {
+		id: generatePresetId(),
+		name: name,
+		systemPrompt: systemPrompt || '',
+		userPrompt: userPrompt || '',
+		profile: profile || null,
+		rateLimit: rateLimit || 0,
+	};
+
+	if (presetType === 'summarize') {
+		settings.summarize_presets.push(preset);
+	} else if (presetType === 'query') {
+		settings.query_presets.push(preset);
+	}
+
+	getContext().saveSettingsDebounced();
+	return preset;
+}
+
+export function updatePreset(presetType, presetId, updates) {
+	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+	const presetIndex = presets.findIndex(preset => preset.id === presetId);
+
+	if (presetIndex === -1) return null;
+
+	Object.assign(presets[presetIndex], updates);
+	getContext().saveSettingsDebounced();
+	return presets[presetIndex];
+}
+
+export function deletePreset(presetType, presetId) {
+	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+	const presetIndex = presets.findIndex(preset => preset.id === presetId);
+
+	if (presetIndex === -1) return false;
+
+	presets.splice(presetIndex, 1);
+
+	// Clear current preset if it was deleted
+	if (presetType === 'summarize' && settings.current_summarize_preset === presetId) {
+		settings.current_summarize_preset = null;
+	} else if (presetType === 'query' && settings.current_query_preset === presetId) {
+		settings.current_query_preset = null;
+	}
+
+	getContext().saveSettingsDebounced();
+	return true;
+}
+
+export function applyPreset(presetType, presetId) {
+	const preset = findPresetById(presetType, presetId);
+	if (!preset) return false;
+
+	if (presetType === 'summarize') {
+		settings.current_summarize_preset = presetId;
+		settings.memory_system_prompt = preset.systemPrompt;
+		settings.memory_prompt_template = preset.userPrompt;
+		settings.profile = preset.profile;
+		settings.rate_limit = preset.rateLimit;
+	} else if (presetType === 'query') {
+		settings.current_query_preset = presetId;
+		settings.chapter_query_system_prompt = preset.systemPrompt;
+		settings.chapter_query_prompt_template = preset.userPrompt;
+		settings.query_profile = preset.profile;
+	}
+
+	getContext().saveSettingsDebounced();
+	return true;
+}
+
+export function createPresetFromCurrentSettings(presetType) {
+	const name = prompt(`Enter a name for this ${presetType} preset:`);
+	if (!name) return null;
+
+	let systemPrompt, userPrompt, profile, rateLimit;
+
+	if (presetType === 'summarize') {
+		systemPrompt = settings.memory_system_prompt;
+		userPrompt = settings.memory_prompt_template;
+		profile = settings.profile;
+		rateLimit = settings.rate_limit;
+	} else if (presetType === 'query') {
+		systemPrompt = settings.chapter_query_system_prompt;
+		userPrompt = settings.chapter_query_prompt_template;
+		profile = settings.query_profile;
+		rateLimit = 0; // Query presets don't use rate limiting
+	}
+
+	// Check for existing preset with same name
+	const existingPresets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+	const existingPreset = existingPresets.find(p => p.name.toLowerCase() === name.toLowerCase());
+
+	if (existingPreset) {
+		const overwrite = confirm(`A preset named "${name}" already exists. Overwrite it?`);
+		if (!overwrite) return null;
+
+		return updatePreset(presetType, existingPreset.id, {
+			systemPrompt,
+			userPrompt,
+			profile,
+			rateLimit
+		});
+	}
+
+	return createPreset(presetType, name, systemPrompt, userPrompt, profile, rateLimit);
 }
