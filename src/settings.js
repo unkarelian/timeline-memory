@@ -653,13 +653,19 @@ export function applyPreset(presetType, presetId) {
 		settings.current_summarize_preset = presetId;
 		settings.memory_system_prompt = preset.systemPrompt;
 		settings.memory_prompt_template = preset.userPrompt;
-		settings.profile = preset.profile;
+		// Only set profile if preset has one, otherwise keep current setting
+		if (preset.profile !== null && preset.profile !== undefined) {
+			settings.profile = preset.profile;
+		}
 		settings.rate_limit = preset.rateLimit;
 	} else if (presetType === 'query') {
 		settings.current_query_preset = presetId;
 		settings.chapter_query_system_prompt = preset.systemPrompt;
 		settings.chapter_query_prompt_template = preset.userPrompt;
-		settings.query_profile = preset.profile;
+		// Only set profile if preset has one, otherwise keep current setting
+		if (preset.profile !== null && preset.profile !== undefined) {
+			settings.query_profile = preset.profile;
+		}
 	}
 
 	getContext().saveSettingsDebounced();
@@ -716,11 +722,20 @@ export function exportCurrentPreset(presetType) {
 		throw new Error(`Selected ${presetType} preset not found`);
 	}
 
+	// Create a copy of the preset without the profile field
+	const presetWithoutProfile = {
+		id: preset.id,
+		name: preset.name,
+		systemPrompt: preset.systemPrompt,
+		userPrompt: preset.userPrompt,
+		rateLimit: preset.rateLimit
+	};
+
 	const exportData = {
 		version: '1.0',
 		type: presetType,
 		timestamp: new Date().toISOString(),
-		preset: preset
+		preset: presetWithoutProfile
 	};
 
 	return JSON.stringify(exportData, null, 2);
@@ -792,7 +807,7 @@ export async function importPreset(jsonData) {
 					name: importData.preset.name,
 					systemPrompt: importData.preset.systemPrompt,
 					userPrompt: importData.preset.userPrompt,
-					profile: importData.preset.profile,
+					profile: importData.preset.profile || null, // Handle missing profile field
 					rateLimit: importData.preset.rateLimit
 				});
 				return { type: presetType, preset: updated, action: 'overwrite' };
@@ -802,8 +817,11 @@ export async function importPreset(jsonData) {
 			}
 		}
 
-		// Generate new ID for new preset
+		// Generate new ID for new preset and ensure profile field is set
 		finalPreset.id = generatePresetId();
+		if (finalPreset.profile === undefined) {
+			finalPreset.profile = null;
+		}
 
 		if (presetType === 'summarize') {
 			settings.summarize_presets.push(finalPreset);
