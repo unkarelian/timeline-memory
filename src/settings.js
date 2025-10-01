@@ -319,6 +319,80 @@ function loadPresetUI() {
 	// Update initial button states
 	updatePresetButtons('summarize', settings.current_summarize_preset);
 	updatePresetButtons('query', settings.current_query_preset);
+
+	// Set up individual preset import/export handlers
+	$('#rmr_export_summarize_preset').on('click', () => handleExportPreset('summarize'));
+	$('#rmr_import_summarize_preset').on('click', () => handleImportPreset('summarize'));
+	$('#rmr_export_query_preset').on('click', () => handleExportPreset('query'));
+	$('#rmr_import_query_preset').on('click', () => handleImportPreset('query'));
+}
+
+// Handle export single preset
+function handleExportPreset(presetType) {
+	try {
+		const exportData = exportCurrentPreset(presetType);
+
+		// Create blob and download
+		const blob = new Blob([exportData], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		const presetName = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+		const presetLabel = findPresetById(presetType, presetName)?.name || 'preset';
+		a.download = `${presetType}-${presetName}-${presetLabel.replace(/[^a-z0-9]/gi, '_')}.json`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+
+		toastr.success(`${presetType} preset exported successfully.`);
+	} catch (error) {
+		console.error('Export error:', error);
+		toastr.error(`Failed to export ${presetType} preset: ${error.message}`);
+	}
+}
+
+// Handle import single preset
+async function handleImportPreset(presetType) {
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = '.json';
+
+	input.onchange = async function(event) {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onload = async function(e) {
+			try {
+				const jsonData = e.target.result;
+				const result = await importPreset(jsonData);
+
+				// Reload preset UI
+				reloadPresetOptions(result.type);
+
+				// Show appropriate success message based on action
+				let message = `Successfully imported ${result.type} preset: ${result.preset.name}`;
+				if (result.action === 'overwrite') {
+					message = `Successfully overwritten ${result.type} preset: ${result.preset.name}`;
+				} else if (result.action === 'renamed') {
+					message = `Successfully imported ${result.type} preset as: ${result.preset.name}`;
+				}
+				toastr.success(message);
+			} catch (error) {
+				console.error('Import error:', error);
+				toastr.error(error.message);
+			}
+		};
+
+		reader.onerror = function() {
+			toastr.error('Failed to read file.');
+		};
+
+		reader.readAsText(file);
+	};
+
+	input.click();
 }
 
 function reloadPresetOptions(presetType) {
@@ -627,4 +701,131 @@ export function createPresetFromCurrentSettings(presetType) {
 	}
 
 	return createPreset(presetType, name, systemPrompt, userPrompt, profile, rateLimit);
+}
+
+// Export current preset to JSON
+export function exportCurrentPreset(presetType) {
+	const currentPresetId = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+
+	if (!currentPresetId) {
+		throw new Error(`No ${presetType} preset selected for export`);
+	}
+
+	const preset = findPresetById(presetType, currentPresetId);
+	if (!preset) {
+		throw new Error(`Selected ${presetType} preset not found`);
+	}
+
+	const exportData = {
+		version: '1.0',
+		type: presetType,
+		timestamp: new Date().toISOString(),
+		preset: preset
+	};
+
+	return JSON.stringify(exportData, null, 2);
+}
+
+// Find existing preset with same name
+function findDuplicatePreset(presetType, presetName) {
+	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+	return presets.find(preset => preset.name.toLowerCase() === presetName.toLowerCase());
+}
+
+// Show dialog for handling duplicate preset names
+async function handleDuplicatePreset(presetType, duplicatePreset, newPreset) {
+	return new Promise((resolve) => {
+		const action = confirm(
+			`A preset named "${newPreset.name}" already exists in ${presetType} presets.\n\n` +
+			`Click:\n` +
+			`• "OK" to overwrite the existing preset\n` +
+			`• "Cancel" to import with a new name\n`
+		);
+
+		if (action) {
+			// Overwrite existing preset
+			resolve({ action: 'overwrite', preset: duplicatePreset });
+		} else {
+			// Rename and create new
+			const newName = prompt(`Enter a new name for the preset "${newPreset.name}":`, `${newPreset.name} - imported`);
+			if (newName && newName.trim()) {
+				resolve({ action: 'rename', newName: newName.trim() });
+			} else {
+				resolve({ action: 'cancel' });
+			}
+		}
+	});
+}
+
+// Import single preset from JSON
+export async function importPreset(jsonData) {
+	try {
+		const importData = JSON.parse(jsonData);
+
+		// Validate import data structure
+		if (!importData.preset || !importData.type) {
+			throw new Error('Invalid preset file: missing preset data or type');
+		}
+
+		const presetType = importData.type;
+		if (presetType !== 'summarize' && presetType !== 'query') {
+			throw new Error('Invalid preset file: unknown preset type');
+		}
+
+		if (!validatePreset(importData.preset)) {
+			throw new Error('Invalid preset file: preset data is malformed');
+		}
+
+		// Check for duplicate names
+		const duplicatePreset = findDuplicatePreset(presetType, importData.preset.name);
+		let finalPreset = { ...importData.preset };
+
+		if (duplicatePreset) {
+			const result = await handleDuplicatePreset(presetType, duplicatePreset, importData.preset);
+
+			if (result.action === 'cancel') {
+				throw new Error('Import cancelled by user');
+			} else if (result.action === 'overwrite') {
+				// Overwrite existing preset
+				finalPreset.id = duplicatePreset.id;
+				const updated = updatePreset(presetType, duplicatePreset.id, {
+					name: importData.preset.name,
+					systemPrompt: importData.preset.systemPrompt,
+					userPrompt: importData.preset.userPrompt,
+					profile: importData.preset.profile,
+					rateLimit: importData.preset.rateLimit
+				});
+				return { type: presetType, preset: updated, action: 'overwrite' };
+			} else if (result.action === 'rename') {
+				// Rename and create new
+				finalPreset.name = result.newName;
+			}
+		}
+
+		// Generate new ID for new preset
+		finalPreset.id = generatePresetId();
+
+		if (presetType === 'summarize') {
+			settings.summarize_presets.push(finalPreset);
+		} else if (presetType === 'query') {
+			settings.query_presets.push(finalPreset);
+		}
+
+		getContext().saveSettingsDebounced();
+		return { type: presetType, preset: finalPreset, action: duplicatePreset ? 'renamed' : 'new' };
+
+	} catch (error) {
+		console.error('Error importing preset:', error);
+		throw new Error(`Failed to import preset: ${error.message}`);
+	}
+}
+
+// Validate preset structure
+function validatePreset(preset) {
+	if (!preset || typeof preset !== 'object') return false;
+	if (!preset.name || typeof preset.name !== 'string') return false;
+	if (!preset.systemPrompt || typeof preset.systemPrompt !== 'string') return false;
+	if (!preset.userPrompt || typeof preset.userPrompt !== 'string') return false;
+	// profile and rateLimit are optional
+	return true;
 }

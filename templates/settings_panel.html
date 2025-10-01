@@ -63,6 +63,10 @@
 								<button type="button" class="menu_button" id="rmr_update_summarize_preset">Update</button>
 								<button type="button" class="menu_button" id="rmr_delete_summarize_preset">Delete</button>
 							</div>
+							<div class="preset-import-export">
+								<button type="button" class="menu_button small" id="rmr_export_summarize_preset">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_summarize_preset">Import</button>
+							</div>
 						</div>
 					</div>
 					<div class="flex-container flex1 flexFlowColumn">
@@ -77,6 +81,10 @@
 								<button type="button" class="menu_button" id="rmr_save_query_preset">Save</button>
 								<button type="button" class="menu_button" id="rmr_update_query_preset">Update</button>
 								<button type="button" class="menu_button" id="rmr_delete_query_preset">Delete</button>
+							</div>
+							<div class="preset-import-export">
+								<button type="button" class="menu_button small" id="rmr_export_query_preset">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_query_preset">Import</button>
 							</div>
 						</div>
 					</div>
@@ -153,5 +161,16 @@
 
 .rmr-extension_block select.text_pole {
 	margin-bottom: 5px;
+}
+
+.preset-import-export {
+	display: flex;
+	gap: 5px;
+	margin-top: 5px;
+}
+
+.preset-import-export .menu_button.small {
+	font-size: 11px;
+	padding: 3px 6px;
 }
 </style>
