@@ -8,6 +8,7 @@ A reworked SillyTavern extension for creating a timeline of summarized chapters 
 - **AI Chapter Queries**: Enable function/tool calls to let the AI query specific chapters with questions
 - **Customizable Prompts**: Configure prompts for scene summarization and queries
 - **Connection Profile Support**: Select specific connection profiles for summarization and queries
+- **Arc Analyzer**: Analyze the chat to propose realistic arc endpoints and turn them into chapters via a popup
 - **Chat Cleanup Tools**: Built-in slash commands to remove reasoning traces and tool call artifacts
 
 ## Installation
@@ -34,6 +35,7 @@ The extension provides the following macros:
 
 - `{{timeline}}` - Outputs a JSON-formatted timeline of all chapter summaries in the current chat. The timeline includes structured information with chapter IDs, message ranges, and summaries.
 - `{{chapterSummary}}` - A placeholder macro that gets replaced with the actual chapter summary during chapter queries. This is automatically substituted when using the `/timeline-query` command or the AI function tool.
+- `{{chapterHistory}}` - The entire chat history rendered as `Name: Message` lines. Used by Arc Analyzer by default.
 
 ### AI Chapter Queries
 
@@ -64,6 +66,8 @@ You can also manually query chapters using the slash command:
   - Default uses `{{content}}` placeholder for the chapter content
 - **Chapter Query Prompt**: Customize the prompt used for querying chapters
   - Uses `{{timeline}}`, `{{chapter}}`, and `{{query}}` placeholders
+ - **Arc Analyzer Prompt**: Customize the prompt used to detect arcs in the chat
+   - Uses `{{chapterHistory}}`
 
 ### Chapter Settings
 - **Hide Summarized Messages**: Automatically hide messages after summarizing
@@ -102,6 +106,10 @@ Regenerate the stored summary for an existing chapter without changing its posit
 - Named arguments:
   - `profile`: Connection profile override for the regeneration request
   - `quiet`: Suppress toast notifications while the command runs
+
+### `/arc-analyze [profile={name}]`
+Analyze the current chat for self-contained arcs and show a popup with buttons to apply each proposed chapter end.
+- `profile`: Optional connection profile name to override the configured Arc Analyzer profile
 
 ### `/remove-reasoning {range}`
 Remove reasoning/thinking blocks from assistant messages in the specified range

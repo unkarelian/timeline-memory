@@ -13,6 +13,59 @@
 				</label>
 			</div>
 			<hr>
+			<h4>Arc Analyzer</h4>
+			<div class="rmr-extension_block">
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_arc_profile">
+							<small>Arc Analyzer Profile</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_arc_profile">
+							<option value="">-- No Override --</option>
+						</select>
+					</div>
+					<div class="flex-container flex0 flexFlowColumn" style="align-items:flex-end;justify-content:flex-end;gap:6px;">
+						<button type="button" class="menu_button" id="rmr_run_arc_analyzer">Analyze Arcs</button>
+					</div>
+				</div>
+
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_arc_preset">
+							<small>Arc Analyzer Preset</small>
+						</label>
+						<div class="preset-row">
+							<select class="text_pole widthNatural" id="rmr_arc_preset">
+								<option value="">-- Custom --</option>
+							</select>
+							<div class="preset-buttons">
+								<button type="button" class="menu_button" id="rmr_save_arc_preset">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_arc_preset">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_arc_preset">Delete</button>
+							</div>
+							<div class="preset-import-export">
+								<button type="button" class="menu_button small" id="rmr_export_arc_preset">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_arc_preset">Import</button>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="rmr-extension_block flex-container flexFlowColumn">
+					<div title="System prompt for arc analysis." class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_arc_analyzer_system_prompt">
+							<small>Arc Analyzer System Prompt</small>
+						</label>
+						<textarea placeholder="System-level instructions for arc analysis (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_arc_analyzer_system_prompt"></textarea>
+					</div>
+					<div title="The prompt used to analyze the chat for arcs. Supports {{chapterHistory}}." class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_arc_analyzer_prompt_template">
+							<small>Arc Analyzer User Prompt</small>
+						</label>
+						<textarea placeholder="" rows="6" class="margin0 text_pole textarea_compact" id="rmr_arc_analyzer_prompt_template"></textarea>
+					</div>
+				</div>
+			<hr>
 			<h4>Message Buttons</h4>
 			<div class="rmr-extension_block">
 				<label class="checkbox_label" for="rmr_chapter_button">

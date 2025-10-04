@@ -13,7 +13,7 @@ export const Buttons = {
 	REMEMBER: "memory_button",
 }
 export const ChapterEndMode = {
-	NONE: "Don't summarize",
+    NONE: "Don't summarize",
 }
 
 const defaultSettings = {
@@ -49,7 +49,38 @@ Based on the chapter content above, please answer the user's query.`,
 	"summarize_presets": [],
 	"query_presets": [],
 	"current_summarize_preset": null,
-	"current_query_preset": null,
+    "current_query_preset": null,
+
+    // Arc analyzer settings
+    "arc_analyzer_system_prompt": `You are Arc Analyzer. Segment a chat transcript into realistic, self-contained narrative arcs suitable to become chapters.
+
+Input format: The chat history is provided as a JSON array of messages. Each item has:
+- id: the 0-based message index in the chat log
+- name: speaker name
+- role: 'user' or 'assistant'
+- text: message content
+
+Output format (strict): return ONLY a JSON array (no prose, no code fences). Each item is an object with:
+- title: short, concrete title (<= 8 words)
+- summary: 2–4 sentences summarizing the arc’s main beats
+- chapterEnd: 0-based integer index of the final message in this arc (use the id field from the input)
+- justification: 1–2 sentences explaining why this endpoint is a coherent boundary
+
+Rules:
+- Produce 3–7 arcs when possible; fewer is OK if the chat is short.
+- Arcs must be contiguous, non-overlapping, and strictly increasing by chapterEnd.
+- Choose chapterEnd at natural beats: resolution/decision, reveal, scene change, escalation, or clear pause/transition.
+- Prefer the latest message that still completes the arc (avoid cutting off mid-beat).
+- Never invent details; base everything only on the provided transcript.
+- Only use IDs that appear in the transcript (hidden messages are omitted).
+- Use only indices that exist (0..N-1) and keep JSON valid.`,
+    "arc_analyzer_prompt_template": `Chat History (JSON array):
+{{chapterHistory}}
+
+Analyze the chat and propose arcs according to the rules. Use the id field from the JSON items to select chapterEnd. Return only the JSON array of {title, summary, chapterEnd, justification}.`,
+    "arc_profile": null,
+    "arc_presets": [],
+    "current_arc_preset": null,
 }
 
 function toggleCheckboxSetting(event) {
@@ -100,19 +131,33 @@ function handleIntValueChange(event) {
 }
 
 function reloadProfiles() {
-	const profileSelect = $('#rmr_profile');
-	profileSelect.not(':first').remove();
-	if (!extension_settings.connectionManager?.profiles) {
-		return;
-	}
-	for (const profile of extension_settings.connectionManager.profiles) {
-		profileSelect.append(
-			$('<option></option>')
-				.attr('value', profile.id)
-				.text(profile.name)
-		);
-		if (settings.profile == profile.id) profileSelect.val(profile.id);
-	}
+    const profileSelect = $('#rmr_profile');
+    profileSelect.not(':first').remove();
+    if (!extension_settings.connectionManager?.profiles) {
+        return;
+    }
+    for (const profile of extension_settings.connectionManager.profiles) {
+        profileSelect.append(
+            $('<option></option>')
+                .attr('value', profile.id)
+                .text(profile.name)
+        );
+        if (settings.profile == profile.id) profileSelect.val(profile.id);
+    }
+
+    // Also populate arc analyzer profile if present
+    const arcProfileSelect = $('#rmr_arc_profile');
+    if (arcProfileSelect?.length) {
+        arcProfileSelect.not(':first').remove();
+        for (const profile of extension_settings.connectionManager.profiles) {
+            arcProfileSelect.append(
+                $('<option></option>')
+                    .attr('value', profile.id)
+                    .text(profile.name)
+            );
+            if (settings.arc_profile == profile.id) arcProfileSelect.val(profile.id);
+        }
+    }
 }
 
 async function loadSettingsUI() {
@@ -122,7 +167,9 @@ async function loadSettingsUI() {
 	$('#rmr_memory_system_prompt').attr('placeholder', defaultSettings.memory_system_prompt || 'System-level instructions for summarization (optional)');
 	$('#rmr_memory_prompt_template').attr('placeholder', defaultSettings.memory_prompt_template);
 	$('#rmr_chapter_query_system_prompt').attr('placeholder', defaultSettings.chapter_query_system_prompt || 'System-level instructions for chapter queries (optional)');
-	$('#rmr_chapter_query_prompt_template').attr('placeholder', defaultSettings.chapter_query_prompt_template);
+    $('#rmr_chapter_query_prompt_template').attr('placeholder', defaultSettings.chapter_query_prompt_template);
+    $('#rmr_arc_analyzer_system_prompt').attr('placeholder', defaultSettings.arc_analyzer_system_prompt || 'System-level instructions for arc analysis (optional)');
+    $('#rmr_arc_analyzer_prompt_template').attr('placeholder', defaultSettings.arc_analyzer_prompt_template);
 	const mode_div = $(`#rmr_chapter_end_mode`);
 	for (const end_mode in ChapterEndMode) {
 		mode_div.append(
@@ -226,25 +273,46 @@ async function loadSettingsUI() {
 		}
 	}
 	
-	queryProfileSelect.on('input', () => {
-		const profile = queryProfileSelect.val();
-		if (!profile.length) {
-			settings.query_profile = null;
-			getContext().saveSettingsDebounced();
-			return;
-		}
-		const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
-		if (profileID >= 0) {
-			settings.query_profile = profile;
-			getContext().saveSettingsDebounced();
-		}
-		else {
-			toastr.error("Non-existent profile selected.", "Timeline Memory");
-			queryProfileSelect.val('');
-			settings.query_profile = null;
-			getContext().saveSettingsDebounced();
-		}
-	});
+    queryProfileSelect.on('input', () => {
+        const profile = queryProfileSelect.val();
+        if (!profile.length) {
+            settings.query_profile = null;
+            getContext().saveSettingsDebounced();
+            return;
+        }
+        const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
+        if (profileID >= 0) {
+            settings.query_profile = profile;
+            getContext().saveSettingsDebounced();
+        }
+        else {
+            toastr.error("Non-existent profile selected.", "Timeline Memory");
+            queryProfileSelect.val('');
+            settings.query_profile = null;
+            getContext().saveSettingsDebounced();
+        }
+    });
+
+    // Arc analyzer profile dropdown
+    const arcProfileSelect = $('#rmr_arc_profile');
+    arcProfileSelect.on('input', () => {
+        const profile = arcProfileSelect.val();
+        if (!profile.length) {
+            settings.arc_profile = null;
+            getContext().saveSettingsDebounced();
+            return;
+        }
+        const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
+        if (profileID >= 0) {
+            settings.arc_profile = profile;
+            getContext().saveSettingsDebounced();
+        } else {
+            toastr.error("Non-existent profile selected.", "Timeline Memory");
+            arcProfileSelect.val('');
+            settings.arc_profile = null;
+            getContext().saveSettingsDebounced();
+        }
+    });
 	
 	// load all numeric settings
 	$(`.rmr-extension_block input[type="number"]`).each((_i, elem) => {
@@ -259,72 +327,107 @@ async function loadSettingsUI() {
 		$(elem).on('change', handleStringValueChange);
 	});
 
-	// Initialize preset UI
-	loadPresetUI();
+    // Initialize preset UI
+    loadPresetUI();
+
+    // Wire the Arc Analyzer run button
+    $('#rmr_run_arc_analyzer').on('click', async () => {
+        try {
+            const { analyzeArcs } = await import('./memories.js');
+            await analyzeArcs();
+        } catch (err) {
+            console.error('Arc Analyzer error:', err);
+            toastr.error('Failed to run Arc Analyzer', 'Timeline Memory');
+        }
+    });
 
 	debug('Settings UI loaded');
 }
 
 function loadPresetUI() {
-	// Load summarize presets
-	reloadPresetOptions('summarize');
+    // Load summarize presets
+    reloadPresetOptions('summarize');
 
-	// Load query presets
-	reloadPresetOptions('query');
+    // Load query presets
+    reloadPresetOptions('query');
+
+    // Load arc presets
+    reloadPresetOptions('arc');
 
 	// Set current preset selections
-	$('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
-	$('#rmr_query_preset').val(settings.current_query_preset || '');
+    $('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
+    $('#rmr_query_preset').val(settings.current_query_preset || '');
+    $('#rmr_arc_preset').val(settings.current_arc_preset || '');
 
 	// Handle preset selection changes
-	$('#rmr_summarize_preset').on('change', function() {
-		const presetId = $(this).val();
-		if (presetId) {
-			applyPreset('summarize', presetId);
-			updatePresetButtons('summarize', presetId);
-			// Refresh UI to show loaded values
-			refreshPromptFields();
-		} else {
-			// Custom mode - clear preset
-			settings.current_summarize_preset = null;
-			getContext().saveSettingsDebounced();
-			updatePresetButtons('summarize', null);
-		}
-	});
+    $('#rmr_summarize_preset').on('change', function() {
+        const presetId = $(this).val();
+        if (presetId) {
+            applyPreset('summarize', presetId);
+            updatePresetButtons('summarize', presetId);
+            // Refresh UI to show loaded values
+            refreshPromptFields();
+        } else {
+            // Custom mode - clear preset
+            settings.current_summarize_preset = null;
+            getContext().saveSettingsDebounced();
+            updatePresetButtons('summarize', null);
+        }
+    });
 
-	$('#rmr_query_preset').on('change', function() {
-		const presetId = $(this).val();
-		if (presetId) {
-			applyPreset('query', presetId);
-			updatePresetButtons('query', presetId);
-			// Refresh UI to show loaded values
-			refreshPromptFields();
-		} else {
-			// Custom mode - clear preset
-			settings.current_query_preset = null;
-			getContext().saveSettingsDebounced();
-			updatePresetButtons('query', null);
-		}
-	});
+    $('#rmr_query_preset').on('change', function() {
+        const presetId = $(this).val();
+        if (presetId) {
+            applyPreset('query', presetId);
+            updatePresetButtons('query', presetId);
+            // Refresh UI to show loaded values
+            refreshPromptFields();
+        } else {
+            // Custom mode - clear preset
+            settings.current_query_preset = null;
+            getContext().saveSettingsDebounced();
+            updatePresetButtons('query', null);
+        }
+    });
+
+    $('#rmr_arc_preset').on('change', function() {
+        const presetId = $(this).val();
+        if (presetId) {
+            applyPreset('arc', presetId);
+            updatePresetButtons('arc', presetId);
+            refreshPromptFields();
+        } else {
+            settings.current_arc_preset = null;
+            getContext().saveSettingsDebounced();
+            updatePresetButtons('arc', null);
+        }
+    });
 
 	// Handle preset save/update/delete buttons
-	$('#rmr_save_summarize_preset').on('click', () => handleSavePreset('summarize'));
-	$('#rmr_update_summarize_preset').on('click', () => handleUpdatePreset('summarize'));
-	$('#rmr_delete_summarize_preset').on('click', () => handleDeletePreset('summarize'));
+    $('#rmr_save_summarize_preset').on('click', () => handleSavePreset('summarize'));
+    $('#rmr_update_summarize_preset').on('click', () => handleUpdatePreset('summarize'));
+    $('#rmr_delete_summarize_preset').on('click', () => handleDeletePreset('summarize'));
 
-	$('#rmr_save_query_preset').on('click', () => handleSavePreset('query'));
-	$('#rmr_update_query_preset').on('click', () => handleUpdatePreset('query'));
-	$('#rmr_delete_query_preset').on('click', () => handleDeletePreset('query'));
+    $('#rmr_save_query_preset').on('click', () => handleSavePreset('query'));
+    $('#rmr_update_query_preset').on('click', () => handleUpdatePreset('query'));
+    $('#rmr_delete_query_preset').on('click', () => handleDeletePreset('query'));
+
+    $('#rmr_save_arc_preset').on('click', () => handleSavePreset('arc'));
+    $('#rmr_update_arc_preset').on('click', () => handleUpdatePreset('arc'));
+    $('#rmr_delete_arc_preset').on('click', () => handleDeletePreset('arc'));
 
 	// Update initial button states
-	updatePresetButtons('summarize', settings.current_summarize_preset);
-	updatePresetButtons('query', settings.current_query_preset);
+    updatePresetButtons('summarize', settings.current_summarize_preset);
+    updatePresetButtons('query', settings.current_query_preset);
+    updatePresetButtons('arc', settings.current_arc_preset);
 
 	// Set up individual preset import/export handlers
-	$('#rmr_export_summarize_preset').on('click', () => handleExportPreset('summarize'));
-	$('#rmr_import_summarize_preset').on('click', () => handleImportPreset('summarize'));
-	$('#rmr_export_query_preset').on('click', () => handleExportPreset('query'));
-	$('#rmr_import_query_preset').on('click', () => handleImportPreset('query'));
+    $('#rmr_export_summarize_preset').on('click', () => handleExportPreset('summarize'));
+    $('#rmr_import_summarize_preset').on('click', () => handleImportPreset('summarize'));
+    $('#rmr_export_query_preset').on('click', () => handleExportPreset('query'));
+    $('#rmr_import_query_preset').on('click', () => handleImportPreset('query'));
+    $('#rmr_export_arc_preset').on('click', () => handleExportPreset('arc'));
+    $('#rmr_import_arc_preset').on('click', () => handleImportPreset('arc'));
 }
 
 // Handle export single preset
@@ -337,9 +440,11 @@ function handleExportPreset(presetType) {
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		const presetName = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
-		const presetLabel = findPresetById(presetType, presetName)?.name || 'preset';
-		a.download = `${presetType}-${presetName}-${presetLabel.replace(/[^a-z0-9]/gi, '_')}.json`;
+		let currentPresetId = settings.current_summarize_preset;
+		if (presetType === 'query') currentPresetId = settings.current_query_preset;
+		if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
+		const presetLabel = findPresetById(presetType, currentPresetId)?.name || 'preset';
+		a.download = `${presetType}-${currentPresetId}-${presetLabel.replace(/[^a-z0-9]/gi, '_')}.json`;
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
@@ -396,14 +501,18 @@ async function handleImportPreset(presetType) {
 }
 
 function reloadPresetOptions(presetType) {
-	const selectId = presetType === 'summarize' ? '#rmr_summarize_preset' : '#rmr_query_preset';
-	const select = $(selectId);
-	const currentVal = select.val();
+    let selectId = '#rmr_summarize_preset';
+    if (presetType === 'query') selectId = '#rmr_query_preset';
+    if (presetType === 'arc') selectId = '#rmr_arc_preset';
+    const select = $(selectId);
+    const currentVal = select.val();
 
 	// Clear existing options except "Custom"
 	select.find('option:not([value=""])').remove();
 
-	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+    let presets = getSummarizePresets();
+    if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'arc') presets = getArcPresets();
 	presets.forEach(preset => {
 		select.append(
 			$('<option></option>')
@@ -417,46 +526,63 @@ function reloadPresetOptions(presetType) {
 }
 
 function updatePresetButtons(presetType, presetId) {
-	const hasPreset = Boolean(presetId);
-	const updateButton = presetType === 'summarize' ? '#rmr_update_summarize_preset' : '#rmr_update_query_preset';
-	const deleteButton = presetType === 'summarize' ? '#rmr_delete_summarize_preset' : '#rmr_delete_query_preset';
+    const hasPreset = Boolean(presetId);
+    let updateButton = '#rmr_update_summarize_preset';
+    let deleteButton = '#rmr_delete_summarize_preset';
+    if (presetType === 'query') {
+        updateButton = '#rmr_update_query_preset';
+        deleteButton = '#rmr_delete_query_preset';
+    }
+    if (presetType === 'arc') {
+        updateButton = '#rmr_update_arc_preset';
+        deleteButton = '#rmr_delete_arc_preset';
+    }
 
 	$(updateButton).prop('disabled', !hasPreset);
 	$(deleteButton).prop('disabled', !hasPreset);
 }
 
 function refreshPromptFields() {
-	// Refresh all prompt field values from settings
-	$('#rmr_memory_system_prompt').val(settings.memory_system_prompt);
-	$('#rmr_memory_prompt_template').val(settings.memory_prompt_template);
-	$('#rmr_chapter_query_system_prompt').val(settings.chapter_query_system_prompt);
-	$('#rmr_chapter_query_prompt_template').val(settings.chapter_query_prompt_template);
-	$('#rmr_profile').val(settings.profile || '');
-	$('#rmr_query_profile').val(settings.query_profile || '');
-	$('#rmr_rate_limit').val(settings.rate_limit);
+    // Refresh all prompt field values from settings
+    $('#rmr_memory_system_prompt').val(settings.memory_system_prompt);
+    $('#rmr_memory_prompt_template').val(settings.memory_prompt_template);
+    $('#rmr_chapter_query_system_prompt').val(settings.chapter_query_system_prompt);
+    $('#rmr_chapter_query_prompt_template').val(settings.chapter_query_prompt_template);
+    $('#rmr_profile').val(settings.profile || '');
+    $('#rmr_query_profile').val(settings.query_profile || '');
+    $('#rmr_arc_analyzer_system_prompt').val(settings.arc_analyzer_system_prompt);
+    $('#rmr_arc_analyzer_prompt_template').val(settings.arc_analyzer_prompt_template);
+    $('#rmr_arc_profile').val(settings.arc_profile || '');
+    $('#rmr_rate_limit').val(settings.rate_limit);
 }
 
 function handleSavePreset(presetType) {
-	const preset = createPresetFromCurrentSettings(presetType);
-	if (preset) {
-		reloadPresetOptions(presetType);
-		const selectId = presetType === 'summarize' ? '#rmr_summarize_preset' : '#rmr_query_preset';
-		$(selectId).val(preset.id);
+    const preset = createPresetFromCurrentSettings(presetType);
+    if (preset) {
+        reloadPresetOptions(presetType);
+        let selectId = '#rmr_summarize_preset';
+        if (presetType === 'query') selectId = '#rmr_query_preset';
+        if (presetType === 'arc') selectId = '#rmr_arc_preset';
+        $(selectId).val(preset.id);
 
-		if (presetType === 'summarize') {
-			settings.current_summarize_preset = preset.id;
-		} else {
-			settings.current_query_preset = preset.id;
-		}
+        if (presetType === 'summarize') {
+            settings.current_summarize_preset = preset.id;
+        } else if (presetType === 'query') {
+            settings.current_query_preset = preset.id;
+        } else if (presetType === 'arc') {
+            settings.current_arc_preset = preset.id;
+        }
 
-		updatePresetButtons(presetType, preset.id);
-		getContext().saveSettingsDebounced();
-		toastr.success(`${presetType} preset saved successfully.`);
-	}
+        updatePresetButtons(presetType, preset.id);
+        getContext().saveSettingsDebounced();
+        toastr.success(`${presetType} preset saved successfully.`);
+    }
 }
 
 function handleUpdatePreset(presetType) {
-	const currentPresetId = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+    let currentPresetId = settings.current_summarize_preset;
+    if (presetType === 'query') currentPresetId = settings.current_query_preset;
+    if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
 		toastr.warning(`No ${presetType} preset selected to update.`);
@@ -465,17 +591,22 @@ function handleUpdatePreset(presetType) {
 
 	let systemPrompt, userPrompt, profile, rateLimit;
 
-	if (presetType === 'summarize') {
-		systemPrompt = settings.memory_system_prompt;
-		userPrompt = settings.memory_prompt_template;
-		profile = settings.profile;
-		rateLimit = settings.rate_limit;
-	} else if (presetType === 'query') {
-		systemPrompt = settings.chapter_query_system_prompt;
-		userPrompt = settings.chapter_query_prompt_template;
-		profile = settings.query_profile;
-		rateLimit = 0;
-	}
+    if (presetType === 'summarize') {
+        systemPrompt = settings.memory_system_prompt;
+        userPrompt = settings.memory_prompt_template;
+        profile = settings.profile;
+        rateLimit = settings.rate_limit;
+    } else if (presetType === 'query') {
+        systemPrompt = settings.chapter_query_system_prompt;
+        userPrompt = settings.chapter_query_prompt_template;
+        profile = settings.query_profile;
+        rateLimit = 0;
+    } else if (presetType === 'arc') {
+        systemPrompt = settings.arc_analyzer_system_prompt;
+        userPrompt = settings.arc_analyzer_prompt_template;
+        profile = settings.arc_profile;
+        rateLimit = 0;
+    }
 
 	const updated = updatePreset(presetType, currentPresetId, {
 		systemPrompt,
@@ -492,7 +623,9 @@ function handleUpdatePreset(presetType) {
 }
 
 function handleDeletePreset(presetType) {
-	const currentPresetId = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+    let currentPresetId = settings.current_summarize_preset;
+    if (presetType === 'query') currentPresetId = settings.current_query_preset;
+    if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
 		toastr.warning(`No ${presetType} preset selected to delete.`);
@@ -506,15 +639,17 @@ function handleDeletePreset(presetType) {
 
 	const deleted = deletePreset(presetType, currentPresetId);
 
-	if (deleted) {
-		reloadPresetOptions(presetType);
-		const selectId = presetType === 'summarize' ? '#rmr_summarize_preset' : '#rmr_query_preset';
-		$(selectId).val('');
-		updatePresetButtons(presetType, null);
-		toastr.success(`${presetType} preset deleted successfully.`);
-	} else {
-		toastr.error(`Failed to delete ${presetType} preset.`);
-	}
+    if (deleted) {
+        reloadPresetOptions(presetType);
+        let selectId = '#rmr_summarize_preset';
+        if (presetType === 'query') selectId = '#rmr_query_preset';
+        if (presetType === 'arc') selectId = '#rmr_arc_preset';
+        $(selectId).val('');
+        updatePresetButtons(presetType, null);
+        toastr.success(`${presetType} preset deleted successfully.`);
+    } else {
+        toastr.error(`Failed to delete ${presetType} preset.`);
+    }
 }
 
 // Removed book selector as we no longer save to lorebooks
@@ -582,42 +717,52 @@ function generatePresetId() {
 }
 
 export function getSummarizePresets() {
-	return settings.summarize_presets || [];
+    return settings.summarize_presets || [];
 }
 
 export function getQueryPresets() {
-	return settings.query_presets || [];
+    return settings.query_presets || [];
+}
+
+export function getArcPresets() {
+    return settings.arc_presets || [];
 }
 
 export function findPresetById(presetType, presetId) {
-	if (!presetId) return null;
-	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
-	return presets.find(preset => preset.id === presetId) || null;
+    if (!presetId) return null;
+    let presets = getSummarizePresets();
+    if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'arc') presets = getArcPresets();
+    return presets.find(preset => preset.id === presetId) || null;
 }
 
 export function createPreset(presetType, name, systemPrompt, userPrompt, profile, rateLimit) {
-	const preset = {
-		id: generatePresetId(),
-		name: name,
-		systemPrompt: systemPrompt || '',
-		userPrompt: userPrompt || '',
-		profile: profile || null,
-		rateLimit: rateLimit || 0,
-	};
+    const preset = {
+        id: generatePresetId(),
+        name: name,
+        systemPrompt: systemPrompt || '',
+        userPrompt: userPrompt || '',
+        profile: profile || null,
+        rateLimit: rateLimit || 0,
+    };
 
-	if (presetType === 'summarize') {
-		settings.summarize_presets.push(preset);
-	} else if (presetType === 'query') {
-		settings.query_presets.push(preset);
-	}
+    if (presetType === 'summarize') {
+        settings.summarize_presets.push(preset);
+    } else if (presetType === 'query') {
+        settings.query_presets.push(preset);
+    } else if (presetType === 'arc') {
+        settings.arc_presets.push(preset);
+    }
 
 	getContext().saveSettingsDebounced();
 	return preset;
 }
 
 export function updatePreset(presetType, presetId, updates) {
-	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
-	const presetIndex = presets.findIndex(preset => preset.id === presetId);
+    let presets = getSummarizePresets();
+    if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'arc') presets = getArcPresets();
+    const presetIndex = presets.findIndex(preset => preset.id === presetId);
 
 	if (presetIndex === -1) return null;
 
@@ -627,71 +772,89 @@ export function updatePreset(presetType, presetId, updates) {
 }
 
 export function deletePreset(presetType, presetId) {
-	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
-	const presetIndex = presets.findIndex(preset => preset.id === presetId);
+    let presets = getSummarizePresets();
+    if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'arc') presets = getArcPresets();
+    const presetIndex = presets.findIndex(preset => preset.id === presetId);
 
 	if (presetIndex === -1) return false;
 
 	presets.splice(presetIndex, 1);
 
 	// Clear current preset if it was deleted
-	if (presetType === 'summarize' && settings.current_summarize_preset === presetId) {
-		settings.current_summarize_preset = null;
-	} else if (presetType === 'query' && settings.current_query_preset === presetId) {
-		settings.current_query_preset = null;
-	}
+    if (presetType === 'summarize' && settings.current_summarize_preset === presetId) {
+        settings.current_summarize_preset = null;
+    } else if (presetType === 'query' && settings.current_query_preset === presetId) {
+        settings.current_query_preset = null;
+    } else if (presetType === 'arc' && settings.current_arc_preset === presetId) {
+        settings.current_arc_preset = null;
+    }
 
 	getContext().saveSettingsDebounced();
 	return true;
 }
 
 export function applyPreset(presetType, presetId) {
-	const preset = findPresetById(presetType, presetId);
-	if (!preset) return false;
+    const preset = findPresetById(presetType, presetId);
+    if (!preset) return false;
 
-	if (presetType === 'summarize') {
-		settings.current_summarize_preset = presetId;
-		settings.memory_system_prompt = preset.systemPrompt;
-		settings.memory_prompt_template = preset.userPrompt;
-		// Only set profile if preset has one, otherwise keep current setting
-		if (preset.profile !== null && preset.profile !== undefined) {
-			settings.profile = preset.profile;
-		}
-		settings.rate_limit = preset.rateLimit;
-	} else if (presetType === 'query') {
-		settings.current_query_preset = presetId;
-		settings.chapter_query_system_prompt = preset.systemPrompt;
-		settings.chapter_query_prompt_template = preset.userPrompt;
-		// Only set profile if preset has one, otherwise keep current setting
-		if (preset.profile !== null && preset.profile !== undefined) {
-			settings.query_profile = preset.profile;
-		}
-	}
+    if (presetType === 'summarize') {
+        settings.current_summarize_preset = presetId;
+        settings.memory_system_prompt = preset.systemPrompt;
+        settings.memory_prompt_template = preset.userPrompt;
+        // Only set profile if preset has one, otherwise keep current setting
+        if (preset.profile !== null && preset.profile !== undefined) {
+            settings.profile = preset.profile;
+        }
+        settings.rate_limit = preset.rateLimit;
+    } else if (presetType === 'query') {
+        settings.current_query_preset = presetId;
+        settings.chapter_query_system_prompt = preset.systemPrompt;
+        settings.chapter_query_prompt_template = preset.userPrompt;
+        // Only set profile if preset has one, otherwise keep current setting
+        if (preset.profile !== null && preset.profile !== undefined) {
+            settings.query_profile = preset.profile;
+        }
+    } else if (presetType === 'arc') {
+        settings.current_arc_preset = presetId;
+        settings.arc_analyzer_system_prompt = preset.systemPrompt;
+        settings.arc_analyzer_prompt_template = preset.userPrompt;
+        if (preset.profile !== null && preset.profile !== undefined) {
+            settings.arc_profile = preset.profile;
+        }
+    }
 
 	getContext().saveSettingsDebounced();
 	return true;
 }
 
 export function createPresetFromCurrentSettings(presetType) {
-	const name = prompt(`Enter a name for this ${presetType} preset:`);
-	if (!name) return null;
+    const name = prompt(`Enter a name for this ${presetType} preset:`);
+    if (!name) return null;
 
-	let systemPrompt, userPrompt, profile, rateLimit;
+    let systemPrompt, userPrompt, profile, rateLimit;
 
-	if (presetType === 'summarize') {
-		systemPrompt = settings.memory_system_prompt;
-		userPrompt = settings.memory_prompt_template;
-		profile = settings.profile;
-		rateLimit = settings.rate_limit;
-	} else if (presetType === 'query') {
-		systemPrompt = settings.chapter_query_system_prompt;
-		userPrompt = settings.chapter_query_prompt_template;
-		profile = settings.query_profile;
-		rateLimit = 0; // Query presets don't use rate limiting
-	}
+    if (presetType === 'summarize') {
+        systemPrompt = settings.memory_system_prompt;
+        userPrompt = settings.memory_prompt_template;
+        profile = settings.profile;
+        rateLimit = settings.rate_limit;
+    } else if (presetType === 'query') {
+        systemPrompt = settings.chapter_query_system_prompt;
+        userPrompt = settings.chapter_query_prompt_template;
+        profile = settings.query_profile;
+        rateLimit = 0; // Query presets don't use rate limiting
+    } else if (presetType === 'arc') {
+        systemPrompt = settings.arc_analyzer_system_prompt;
+        userPrompt = settings.arc_analyzer_prompt_template;
+        profile = settings.arc_profile;
+        rateLimit = 0;
+    }
 
 	// Check for existing preset with same name
-	const existingPresets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
+    let existingPresets = getSummarizePresets();
+    if (presetType === 'query') existingPresets = getQueryPresets();
+    if (presetType === 'arc') existingPresets = getArcPresets();
 	const existingPreset = existingPresets.find(p => p.name.toLowerCase() === name.toLowerCase());
 
 	if (existingPreset) {
@@ -711,13 +874,15 @@ export function createPresetFromCurrentSettings(presetType) {
 
 // Export current preset to JSON
 export function exportCurrentPreset(presetType) {
-	const currentPresetId = presetType === 'summarize' ? settings.current_summarize_preset : settings.current_query_preset;
+    let currentPresetId = settings.current_summarize_preset;
+    if (presetType === 'query') currentPresetId = settings.current_query_preset;
+    if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
 		throw new Error(`No ${presetType} preset selected for export`);
 	}
 
-	const preset = findPresetById(presetType, currentPresetId);
+    const preset = findPresetById(presetType, currentPresetId);
 	if (!preset) {
 		throw new Error(`Selected ${presetType} preset not found`);
 	}
@@ -743,8 +908,10 @@ export function exportCurrentPreset(presetType) {
 
 // Find existing preset with same name
 function findDuplicatePreset(presetType, presetName) {
-	const presets = presetType === 'summarize' ? getSummarizePresets() : getQueryPresets();
-	return presets.find(preset => preset.name.toLowerCase() === presetName.toLowerCase());
+    let presets = getSummarizePresets();
+    if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'arc') presets = getArcPresets();
+    return presets.find(preset => preset.name.toLowerCase() === presetName.toLowerCase());
 }
 
 // Show dialog for handling duplicate preset names
@@ -783,9 +950,9 @@ export async function importPreset(jsonData) {
 		}
 
 		const presetType = importData.type;
-		if (presetType !== 'summarize' && presetType !== 'query') {
-			throw new Error('Invalid preset file: unknown preset type');
-		}
+        if (presetType !== 'summarize' && presetType !== 'query' && presetType !== 'arc') {
+            throw new Error('Invalid preset file: unknown preset type');
+        }
 
 		if (!validatePreset(importData.preset)) {
 			throw new Error('Invalid preset file: preset data is malformed');
@@ -823,11 +990,13 @@ export async function importPreset(jsonData) {
 			finalPreset.profile = null;
 		}
 
-		if (presetType === 'summarize') {
-			settings.summarize_presets.push(finalPreset);
-		} else if (presetType === 'query') {
-			settings.query_presets.push(finalPreset);
-		}
+        if (presetType === 'summarize') {
+            settings.summarize_presets.push(finalPreset);
+        } else if (presetType === 'query') {
+            settings.query_presets.push(finalPreset);
+        } else if (presetType === 'arc') {
+            settings.arc_presets.push(finalPreset);
+        }
 
 		getContext().saveSettingsDebounced();
 		return { type: presetType, preset: finalPreset, action: duplicatePreset ? 'renamed' : 'new' };

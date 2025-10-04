@@ -370,16 +370,33 @@ export function initTimelineMacro() {
 		return chaptersContent.join("\n\n");
 	}, 'All chapter contents with headers in order');
 
-	// Register the chapterSummary macro - returns all chapter summaries with headers
-	MacrosParser.registerMacro('chapterSummary', () => {
-		if (!timelineData || timelineData.length === 0) return '';
+    // Register the chapterSummary macro - returns all chapter summaries with headers
+    MacrosParser.registerMacro('chapterSummary', () => {
+        if (!timelineData || timelineData.length === 0) return '';
 
 		const summaries = timelineData.map((chapter, index) => {
 			return `Chapter ${index + 1} Summary: ${chapter.summary}`;
 		});
 
-		return summaries.join("\n\n");
-	}, 'All chapter summaries with headers in order');
+        return summaries.join("\n\n");
+    }, 'All chapter summaries with headers in order');
+
+    // Register chapterHistory macro - returns visible chat history as a JSON array of { id, name, role, text }
+    MacrosParser.registerMacro('chapterHistory', () => {
+        const context = getContext();
+        const chat = Array.isArray(context.chat) ? context.chat : [];
+        if (!chat.length) return [];
+        const items = chat
+            .map((m, idx) => ({ m, idx }))
+            .filter(({ m }) => !m?.is_system)
+            .map(({ m, idx }) => ({
+                id: idx,
+                name: String(m?.name || (m?.is_user ? context.name1 : context.name2) || ''),
+                role: m?.is_user ? 'user' : 'assistant',
+                text: String(m?.mes || ''),
+            }));
+        return items; // Macros engine will stringify this array
+    }, 'Visible chat history as JSON array of { id, name, role, text }');
 }
 
 // Load timeline data from chat metadata
@@ -1229,5 +1246,172 @@ export async function logMessage() {
 }
 
 export async function fadeMemories() {
-	// No longer needed
+    // No longer needed
+}
+
+// ---- Arc Analyzer ----
+
+function stripJsonFences(text) {
+    if (typeof text !== 'string') return '';
+    const fenced = text.match(/```(?:json)?\n([\s\S]*?)\n```/i);
+    if (fenced && fenced[1]) return fenced[1].trim();
+    return text.trim();
+}
+
+function tryParseJsonArray(text) {
+    try {
+        return JSON.parse(text);
+    } catch (_) {
+        // Try to extract first array
+        const start = text.indexOf('[');
+        const end = text.lastIndexOf(']');
+        if (start !== -1 && end !== -1 && end > start) {
+            const slice = text.slice(start, end + 1);
+            try {
+                return JSON.parse(slice);
+            } catch (_) { /* noop */ }
+        }
+    }
+    return null;
+}
+
+function validateArcItems(items) {
+    if (!Array.isArray(items)) return [];
+    const context = getContext();
+    const maxId = (context.chat?.length ?? 1) - 1;
+    return items
+        .map((it, idx) => {
+            const title = String(it?.title ?? '').trim();
+            const summary = String(it?.summary ?? '').trim();
+            const justification = String(it?.justification ?? '').trim();
+            const chapterEnd = Number(it?.chapterEnd);
+            const validId = Number.isInteger(chapterEnd) && chapterEnd >= 0 && chapterEnd <= maxId;
+            return validId && title && summary ? { title, summary, justification, chapterEnd, _idx: idx } : null;
+        })
+        .filter(Boolean);
+}
+
+function _sanitize(text) {
+    try {
+        if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(String(text ?? ''));
+    } catch (_) { /* ignore */ }
+    return String(text ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+}
+
+async function showArcPopup(arcs) {
+    const Popup = getContext().Popup;
+    if (!Array.isArray(arcs) || arcs.length === 0) {
+        await Popup.show.text('Arc Analyzer', 'No valid arcs found.');
+        return;
+    }
+
+    const listHtml = arcs
+        .map(a => `<div class="arc-item"><b>${_sanitize(a.title)}</b> <small>(end @ ${a.chapterEnd})</small><br>${_sanitize(a.summary)}<br><i>${_sanitize(a.justification || '')}</i></div>`)
+        .join('<hr class="sysHR">');
+
+    /** @type {import('../../../../public/scripts/popup.js').CustomPopupButton[]} */
+    const customButtons = [];
+    // Try to resolve the summarization profile name so we can pass it to /chapter-end
+    let summarizerProfileName = '';
+    try {
+        const profiles = extension_settings?.connectionManager?.profiles || [];
+        const prof = profiles.find(p => p.id === settings.profile);
+        summarizerProfileName = prof?.name || '';
+    } catch (_) { /* ignore */ }
+
+    const quoteArg = (s) => String(s).replace(/"/g, '\\"');
+    for (const a of arcs) {
+        customButtons.push({
+            text: `End @ ${a.chapterEnd}: ${a.title}`,
+            classes: ['menu_button'],
+            result: 1,
+            action: async () => {
+                try {
+                    // Validate the target message exists in the DOM
+                    const mesId = Number(a.chapterEnd);
+                    const mesEl = $(`.mes[mesid="${mesId}"]`);
+                    if (!mesEl || mesEl.length === 0) {
+                        toastr.error(`Message ${mesId} not found. The chat may have changed.`, 'Arc Analyzer');
+                        return;
+                    }
+
+                    // If we have a summarization profile selected, use it for the summary instead of analyzer profile
+                    const profileArg = summarizerProfileName ? ` profile="${quoteArg(summarizerProfileName)}"` : '';
+                    // Place named args before the unnamed one, otherwise parser may include them in the value
+                    await runSlashCommand(`/chapter-end${profileArg} ${mesId}`);
+                    toastr.success(`Chapter ended at ${a.chapterEnd}`, 'Arc Analyzer');
+                } catch (err) {
+                    console.error('Arc apply error:', err);
+                    toastr.error('Failed to apply chapter end', 'Arc Analyzer');
+                }
+            },
+        });
+    }
+    customButtons.push({ text: 'Close', result: 1, classes: ['menu_button', 'menu_button_secondary'], appendAtEnd: true });
+
+    const safeHtml = `<div class="arc-list">${listHtml}</div>`;
+    await Popup.show.text('Arc Analyzer', safeHtml, { leftAlign: true, wide: true, allowVerticalScrolling: true, customButtons });
+}
+
+export async function analyzeArcs(profileOverride = null) {
+    try {
+        const context = getContext();
+        const profileId = profileOverride || settings.arc_profile;
+        if (!profileId) {
+            toastr.error('Select an Arc Analyzer profile first', 'Timeline Memory');
+            return;
+        }
+
+        // Build prompt content
+        const history = evaluateMacros('{{chapterHistory}}', {});
+        let prompt = settings.arc_analyzer_prompt_template || '';
+        prompt = prompt.replace(/{{chapterHistory}}/gi, history);
+        prompt = context.substituteParams(prompt, context.name1, context.name2);
+
+        let systemPrompt = '';
+        if (settings.arc_analyzer_system_prompt && settings.arc_analyzer_system_prompt.trim()) {
+            systemPrompt = settings.arc_analyzer_system_prompt;
+            systemPrompt = systemPrompt.replace(/{{chapterHistory}}/gi, history);
+            systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+        }
+
+        infoToast('Analyzing arcs...');
+
+        // Prepare messages
+        const messages = [];
+        if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+        messages.push({ role: 'user', content: prompt });
+
+        // Token + overrides
+        const maxTokens = await getMaxTokensForProfile(profileId);
+        const overridePayload = buildOverridePayload(profileId, maxTokens);
+        const reasoningEffort = getReasoningEffort(profileId);
+        if (reasoningEffort !== undefined) overridePayload.reasoning_effort = reasoningEffort;
+
+        // Send via ConnectionManagerRequestService
+        const result = await ConnectionManagerRequestService.sendRequest(
+            profileId,
+            messages,
+            maxTokens,
+            { includePreset: true, includeInstruct: true, stream: false },
+            overridePayload,
+        );
+
+        const content = result?.content || result || '';
+        const parsed = await reasoningParser(content, profileId);
+        const finalContent = parsed ? parsed.content : content;
+
+        const unfenced = stripJsonFences(finalContent);
+        const arr = tryParseJsonArray(unfenced);
+        const arcs = validateArcItems(arr);
+
+        if (!arcs.length) {
+            toastr.warning('No valid arc entries found in output', 'Arc Analyzer');
+        }
+
+        await showArcPopup(arcs);
+    } catch (err) {
+        console.error('Arc Analyzer failure:', err);
+        toastr.error('Arc analysis failed', 'Timeline Memory');
+    }
 }

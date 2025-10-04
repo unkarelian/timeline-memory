@@ -259,6 +259,33 @@ export function loadSlashCommands() {
 
 	// Register main chapter-end command
 	parser.addCommandObject(command.fromProps({
+		name: 'arc-analyze',
+		callback: async (args) => {
+			try {
+				const { analyzeArcs } = await import('./memories.js');
+				let overrideProfile = undefined;
+				if (args.profile !== undefined) {
+					overrideProfile = profileIdFromName(args.profile);
+				}
+				await analyzeArcs(overrideProfile);
+				return '';
+			} catch (err) {
+				console.error('Arc Analyze command failed:', err);
+				return '';
+			}
+		},
+		namedArgumentList: [
+			namedArg.fromProps({
+				name: 'profile',
+				description: 'Name of a connection profile to override the analyzer profile',
+				enumProvider: profilesProvider,
+				isRequired: false,
+			}),
+		],
+		helpString: 'Analyze the chat history to propose arc endpoints and show them in a popup.',
+	}));
+
+	parser.addCommandObject(command.fromProps({
 		name: 'chapter-end',
 		callback: (args, value) => {
 			const message = getMesFromInput(value);
