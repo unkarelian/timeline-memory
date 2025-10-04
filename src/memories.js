@@ -675,14 +675,25 @@ async function genSummaryWithSlash(history, id=0) {
 	if (id > 0) {
 		infoToast("Generating summary #"+id+"....");
 	}
+	// Get timeline context for macro replacement
+	const timelineContext = evaluateMacros('{{timeline}}', {});
+
 	const prompt_text = settings.memory_prompt_template.replace('{{content}}', history.trim());
+
+	// Replace {{timeline}} macro in prompt
+	let finalPrompt = prompt_text.replace(/{{timeline}}/gi, timelineContext);
+
+	// Also substitute standard params like {{char}}, {{user}}, etc.
+	const context = getContext();
+	finalPrompt = context.substituteParams(finalPrompt, context.name1, context.name2);
 
 	// Process system prompt with macro replacements
 	let systemPrompt = '';
 	if (settings.memory_system_prompt && settings.memory_system_prompt.trim()) {
 		systemPrompt = settings.memory_system_prompt.replace('{{content}}', history.trim());
+		// Replace {{timeline}} macro in system prompt
+		systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
 		// Also substitute standard params like {{char}}, {{user}}, etc.
-		const context = getContext();
 		systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
 	}
 
@@ -699,7 +710,7 @@ async function genSummaryWithSlash(history, id=0) {
 			if (systemPrompt) {
 				messages.push({ role: 'system', content: systemPrompt });
 			}
-			messages.push({ role: 'user', content: prompt_text });
+			messages.push({ role: 'user', content: finalPrompt });
 
 			// Get max tokens for the profile
 			const maxTokens = await getMaxTokensForProfile(profileId);
