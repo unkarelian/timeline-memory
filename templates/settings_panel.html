@@ -93,6 +93,14 @@
 						<select class="text_pole widthNatural" id="rmr_query_profile">
 						</select>
 					</div>
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_timeline_fill_profile">
+							<small>Timeline Fill Profile</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_timeline_fill_profile">
+							<option value="">-- No Override --</option>
+						</select>
+					</div>
 				</div>
 				<label for="rmr_rate_limit">
 					<span>Max Requests per Minute</span>
@@ -141,6 +149,25 @@
 							</div>
 						</div>
 					</div>
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_timeline_fill_preset">
+							<small>Timeline Fill Preset</small>
+						</label>
+						<div class="preset-row">
+							<select class="text_pole widthNatural" id="rmr_timeline_fill_preset">
+								<option value="">-- Custom --</option>
+							</select>
+							<div class="preset-buttons">
+								<button type="button" class="menu_button" id="rmr_save_timeline_fill_preset">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_timeline_fill_preset">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_timeline_fill_preset">Delete</button>
+							</div>
+							<div class="preset-import-export">
+								<button type="button" class="menu_button small" id="rmr_export_timeline_fill_preset">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_timeline_fill_preset">Import</button>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 			<hr>
@@ -170,6 +197,19 @@
 						<small>Chapter Query User Prompt</small>
 					</label>
 					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_chapter_query_prompt_template"></textarea>
+				</div>
+				<hr class="sysHR">
+				<div title="System prompt for timeline fill generation." class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_timeline_fill_system_prompt">
+						<small>Timeline Fill System Prompt</small>
+					</label>
+					<textarea placeholder="System-level instructions for timeline fill (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_timeline_fill_system_prompt"></textarea>
+				</div>
+				<div title="The prompt the assistant should follow to propose timeline queries in JSON format." class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_timeline_fill_prompt_template">
+						<small>Timeline Fill User Prompt</small>
+					</label>
+					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_timeline_fill_prompt_template"></textarea>
 				</div>
 			</div>
 			<hr>

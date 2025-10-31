@@ -2,7 +2,7 @@ import { eventSource, event_types } from "../../../../script.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
 import { loadSettings, changeCharaName } from "./src/settings.js";
-import { initTimelineMacro, loadTimelineData } from "./src/memories.js";
+import { initTimelineMacro, loadTimelineData, resetTimelineFillResults } from "./src/memories.js";
 
 export const extension_name = 'timeline-memory';
 
@@ -41,10 +41,12 @@ jQuery(async () => {
 		eventSource.on(event_types.USER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHAT_CHANGED, (chatId)=>{
+			resetTimelineFillResults();
 			if (!chatId) return;
 			loadTimelineData();
 			resetMessageButtons();
 		});
+		eventSource.on(event_types.MESSAGE_SENT, resetTimelineFillResults);
 		eventSource.on(event_types.MORE_MESSAGES_LOADED, resetMessageButtons);
 		eventSource.on(event_types.CHARACTER_RENAMED, changeCharaName);
 		

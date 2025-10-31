@@ -125,6 +125,7 @@ function getReasoningEffort(profileId) {
 
 // Store timeline data
 let timelineData = [];
+let timelineFillResults = [];
 
 let commandArgs;
 
@@ -137,6 +138,22 @@ const delay_ms = ()=> {
 	return Math.max(500, 60000 / Number(settings.rate_limit));
 }
 let last_gen_timestamp = 0;
+
+export function getTimelineFillResults() {
+	return Array.isArray(timelineFillResults) ? [...timelineFillResults] : [];
+}
+
+export function setTimelineFillResults(results) {
+	if (Array.isArray(results)) {
+		timelineFillResults = [...results];
+	} else {
+		timelineFillResults = [];
+	}
+}
+
+export function resetTimelineFillResults() {
+	timelineFillResults = [];
+}
 
 /**
  * Get the max tokens setting for the current connection or a specific profile
@@ -397,6 +414,13 @@ export function initTimelineMacro() {
             }));
         return items; // Macros engine will stringify this array
     }, 'Visible chat history as JSON array of { id, name, role, text }');
+
+    MacrosParser.registerMacro('timelineResponses', () => {
+        if (!Array.isArray(timelineFillResults) || timelineFillResults.length === 0) {
+            return [];
+        }
+        return timelineFillResults;
+    }, 'Latest timeline fill query results as JSON array of { chapters | startChapter,endChapter, query, response }');
 }
 
 // Load timeline data from chat metadata
@@ -792,6 +816,337 @@ async function reasoningParser(str, profileId, { strict=true } = {}) {
         //const parser = new ReasoningParser(template.prefix, template.suffix, template.separator);
        // const parsed = parser.parse(content);
     }
+}
+
+function stripCodeFences(text) {
+	if (typeof text !== 'string') {
+		return '';
+	}
+	let cleaned = text.trim();
+	const fenceMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+	if (fenceMatch) {
+		cleaned = fenceMatch[1].trim();
+	}
+	return cleaned;
+}
+
+function extractJsonArrayFromText(text) {
+	if (!text) {
+		return null;
+	}
+	const cleaned = stripCodeFences(text);
+	const firstBracket = cleaned.indexOf('[');
+	const lastBracket = cleaned.lastIndexOf(']');
+
+	if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+		const candidate = cleaned.slice(firstBracket, lastBracket + 1);
+		try {
+			return JSON.parse(candidate);
+		} catch (error) {
+			debug('Failed to parse candidate JSON array:', error);
+		}
+	}
+
+	try {
+		return JSON.parse(cleaned);
+	} catch (error) {
+		debug('Failed to parse full response as JSON:', error);
+		return null;
+	}
+}
+
+function coerceChapterNumber(value) {
+	const num = Number(value);
+	if (!Number.isFinite(num)) {
+		return null;
+	}
+	const int = Math.floor(num);
+	return int >= 1 ? int : null;
+}
+
+function uniqueSortedChapters(chapters) {
+	return Array.from(new Set(chapters.filter((num) => typeof num === 'number')))
+		.sort((a, b) => a - b);
+}
+
+function chaptersAreContiguous(chapters) {
+	if (chapters.length <= 1) {
+		return true;
+	}
+	for (let i = 1; i < chapters.length; i++) {
+		if (chapters[i] !== chapters[i - 1] + 1) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function normalizeTimelineFillItem(item, index) {
+	const errors = [];
+	if (!item || typeof item !== 'object') {
+		errors.push(`Item at index ${index} is not an object.`);
+		return { errors };
+	}
+
+	const query = typeof item.query === 'string' ? item.query.trim() : '';
+	if (!query) {
+		errors.push(`Item ${index} is missing a valid "query" string.`);
+	}
+
+	const collectedChapters = [];
+	const chapterArrays = [
+		item.chapters,
+		item.chapterNumbers,
+		item.chapter_ids,
+		Array.isArray(item.chapterRange) && item.chapterRange.length === 2 ? item.chapterRange : null,
+	];
+
+	for (const candidate of chapterArrays) {
+		if (Array.isArray(candidate)) {
+			for (const value of candidate) {
+				const num = coerceChapterNumber(value);
+				if (num !== null) {
+					collectedChapters.push(num);
+				}
+			}
+		}
+	}
+
+	const singleChapterCandidates = [
+		item.chapter,
+		item.chapterNumber,
+		item.chapter_id,
+	];
+
+	for (const candidate of singleChapterCandidates) {
+		const num = coerceChapterNumber(candidate);
+		if (num !== null) {
+			collectedChapters.push(num);
+		}
+	}
+
+	let rangeStart = coerceChapterNumber(
+		item.startChapter ?? item.chapterStart ?? item.range?.start ?? item.range?.from,
+	);
+	let rangeEnd = coerceChapterNumber(
+		item.endChapter ?? item.chapterEnd ?? item.range?.end ?? item.range?.to,
+	);
+
+	if (Array.isArray(item.range) && item.range.length === 2) {
+		const [a, b] = item.range;
+		const rangeValues = [coerceChapterNumber(a), coerceChapterNumber(b)];
+		if (rangeValues[0] !== null && rangeValues[1] !== null) {
+			rangeStart = rangeValues[0];
+			rangeEnd = rangeValues[1];
+		}
+	}
+
+	if (rangeStart !== null && rangeEnd !== null) {
+		if (rangeEnd < rangeStart) {
+			[rangeStart, rangeEnd] = [rangeEnd, rangeStart];
+		}
+		for (let chapter = rangeStart; chapter <= rangeEnd; chapter++) {
+			collectedChapters.push(chapter);
+		}
+	}
+
+	const chapters = uniqueSortedChapters(collectedChapters);
+	if (!chapters.length) {
+		errors.push(`Item ${index} must include either "chapters" array, a single "chapter", or a "startChapter"/"endChapter" range.`);
+	}
+
+	return {
+		errors,
+		item: {
+			query,
+			chapters,
+			startChapter: chapters.length ? chapters[0] : null,
+			endChapter: chapters.length ? chapters[chapters.length - 1] : null,
+		},
+	};
+}
+
+function validateTimelineFillItems(rawItems) {
+	if (!Array.isArray(rawItems)) {
+		throw new Error('Timeline fill response must be a JSON array.');
+	}
+
+	const normalized = [];
+	const errors = [];
+
+	rawItems.forEach((entry, index) => {
+		const result = normalizeTimelineFillItem(entry, index);
+		if (result.errors.length) {
+			errors.push(...result.errors);
+			return;
+		}
+		normalized.push(result.item);
+	});
+
+	if (errors.length) {
+		throw new Error(errors.join('\n'));
+	}
+
+	return normalized;
+}
+
+export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
+	loadTimelineData();
+
+	const profileId = profileOverride || settings.timeline_fill_profile;
+	if (!profileId) {
+		throw new Error('Timeline fill profile is not configured. Please select one in the settings.');
+	}
+
+	const context = getContext();
+	const timelineMacroResult = evaluateMacros('{{timeline}}', {}) ?? [];
+	const historyMacroResult = evaluateMacros('{{chapterHistory}}', {}) ?? [];
+
+	const timelineContext = typeof timelineMacroResult === 'string'
+		? timelineMacroResult
+		: JSON.stringify(timelineMacroResult, null, 2);
+
+	const historyContext = typeof historyMacroResult === 'string'
+		? historyMacroResult
+		: JSON.stringify(historyMacroResult, null, 2);
+
+	let userPrompt = settings.timeline_fill_prompt_template || '';
+	userPrompt = userPrompt.replace(/{{timeline}}/gi, timelineContext);
+	userPrompt = userPrompt.replace(/{{chapterHistory}}/gi, historyContext);
+	userPrompt = context.substituteParams(userPrompt, context.name1, context.name2);
+
+	let systemPrompt = settings.timeline_fill_system_prompt || '';
+	if (systemPrompt) {
+		systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
+		systemPrompt = systemPrompt.replace(/{{chapterHistory}}/gi, historyContext);
+		systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+	}
+
+	const messages = [];
+	if (systemPrompt) {
+		messages.push({ role: 'system', content: systemPrompt });
+	}
+	messages.push({ role: 'user', content: userPrompt });
+
+	try {
+		debug('Timeline fill request messages:', messages);
+
+		const maxTokens = await getMaxTokensForProfile(profileId);
+		const overridePayload = buildOverridePayload(profileId, maxTokens);
+		const reasoningEffort = getReasoningEffort(profileId);
+		if (reasoningEffort !== undefined) {
+			overridePayload.reasoning_effort = reasoningEffort;
+		}
+
+		const result = await ConnectionManagerRequestService.sendRequest(
+			profileId,
+			messages,
+			maxTokens,
+			{
+				includePreset: true,
+				includeInstruct: true,
+				stream: false,
+			},
+			overridePayload,
+		);
+
+		const rawContent = result?.content || result || '';
+		const parsedReasoning = await reasoningParser(rawContent, profileId, { strict: false });
+		const content = parsedReasoning ? parsedReasoning.content : rawContent;
+
+		debug('Timeline fill raw response:', content);
+
+		const parsed = extractJsonArrayFromText(content);
+		let items = [];
+
+		if (Array.isArray(parsed)) {
+			items = parsed;
+		} else if (parsed?.queries && Array.isArray(parsed.queries)) {
+			items = parsed.queries;
+		} else if (parsed?.timelineQueries && Array.isArray(parsed.timelineQueries)) {
+			items = parsed.timelineQueries;
+		} else {
+			throw new Error('Timeline fill response did not include a JSON array of queries.');
+		}
+
+		const tasks = validateTimelineFillItems(items);
+		const aggregatedResults = [];
+		const previousCommandArgs = commandArgs;
+		commandArgs = { ...(previousCommandArgs || {}), quiet };
+
+		setTimelineFillResults([]);
+
+		try {
+			for (const task of tasks) {
+				const { query, chapters } = task;
+				if (!chapters.length) {
+					continue;
+				}
+
+				const contiguous = chaptersAreContiguous(chapters);
+				const start = chapters[0];
+				const end = chapters[chapters.length - 1];
+
+				if (contiguous && chapters.length > 1) {
+					try {
+						const response = await queryChapters(start, end, query);
+						aggregatedResults.push({
+							mode: 'range',
+							query,
+							chapters,
+							startChapter: start,
+							endChapter: end,
+							response: String(response ?? ''),
+						});
+					} catch (error) {
+						debug('Timeline fill range query failed:', error);
+						aggregatedResults.push({
+							mode: 'range',
+							query,
+							chapters,
+							startChapter: start,
+							endChapter: end,
+							response: '',
+							error: error?.message || String(error),
+						});
+					}
+				} else {
+					for (const chapter of chapters) {
+						try {
+							const response = await queryChapter(chapter, query);
+							aggregatedResults.push({
+								mode: 'single',
+								query,
+								chapters: [chapter],
+								startChapter: chapter,
+								endChapter: chapter,
+								response: String(response ?? ''),
+							});
+						} catch (error) {
+							debug('Timeline fill chapter query failed:', error);
+							aggregatedResults.push({
+								mode: 'single',
+								query,
+								chapters: [chapter],
+								startChapter: chapter,
+								endChapter: chapter,
+								response: '',
+								error: error?.message || String(error),
+							});
+						}
+					}
+				}
+			}
+		} finally {
+			commandArgs = previousCommandArgs;
+		}
+
+		setTimelineFillResults(aggregatedResults);
+		return aggregatedResults;
+	} catch (error) {
+		debug('Timeline fill failed:', error);
+		throw error;
+	}
 }
 
 

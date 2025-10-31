@@ -38,9 +38,22 @@ Current chapter content:
 User query: {{query}}
 
 Based on the chapter content above, please answer the user's query.`,
+	"timeline_fill_system_prompt": "",
+	"timeline_fill_prompt_template": `Visible chat history:
+{{chapterHistory}}
+
+Existing chapter timeline:
+{{timeline}}
+
+Provide a JSON array where each item describes a question to ask about the timeline. Each item MUST be an object with:
+- "query": the question string.
+- EITHER "chapters": an array of chapter numbers to query,
+  OR both "startChapter" and "endChapter" integers defining an inclusive range.
+You may include both styles in the same array. Return ONLY the JSON array, no code fences or commentary.`,
 	"rate_limit": 0, // requests per minute. 0 means no limit
 	"profile": null, // optional connection-profile override for summarization
 	"query_profile": null, // optional connection-profile override for chapter queries
+	"timeline_fill_profile": null, // optional profile override for timeline fill generation
 	// chapter end settings
 	"hide_chapter": true, // hide messages after summarizing the chapter
 	"add_chunk_summaries": false, // add a comment containing all of the individual chunk summaries
@@ -50,6 +63,8 @@ Based on the chapter content above, please answer the user's query.`,
 	"query_presets": [],
 	"current_summarize_preset": null,
     "current_query_preset": null,
+	"timeline_fill_presets": [],
+	"current_timeline_fill_preset": null,
 
     // Arc analyzer settings
     "arc_analyzer_system_prompt": `You are Arc Analyzer. Segment a chat transcript into realistic, self-contained narrative arcs suitable to become chapters.
@@ -133,7 +148,21 @@ function handleIntValueChange(event) {
 function reloadProfiles() {
     const profileSelect = $('#rmr_profile');
     profileSelect.not(':first').remove();
+    const timelineFillSelect = $('#rmr_timeline_fill_profile');
+    if (timelineFillSelect?.length) {
+        timelineFillSelect.not(':first').remove();
+    }
+    const arcProfileSelect = $('#rmr_arc_profile');
+    if (arcProfileSelect?.length) {
+        arcProfileSelect.not(':first').remove();
+    }
     if (!extension_settings.connectionManager?.profiles) {
+        if (timelineFillSelect?.length) {
+            timelineFillSelect.val('');
+        }
+        if (arcProfileSelect?.length) {
+            arcProfileSelect.val('');
+        }
         return;
     }
     for (const profile of extension_settings.connectionManager.profiles) {
@@ -143,19 +172,25 @@ function reloadProfiles() {
                 .text(profile.name)
         );
         if (settings.profile == profile.id) profileSelect.val(profile.id);
-    }
-
-    // Also populate arc analyzer profile if present
-    const arcProfileSelect = $('#rmr_arc_profile');
-    if (arcProfileSelect?.length) {
-        arcProfileSelect.not(':first').remove();
-        for (const profile of extension_settings.connectionManager.profiles) {
+        if (timelineFillSelect?.length) {
+            timelineFillSelect.append(
+                $('<option></option>')
+                    .attr('value', profile.id)
+                    .text(profile.name)
+            );
+            if (settings.timeline_fill_profile == profile.id) {
+                timelineFillSelect.val(profile.id);
+            }
+        }
+        if (arcProfileSelect?.length) {
             arcProfileSelect.append(
                 $('<option></option>')
                     .attr('value', profile.id)
                     .text(profile.name)
             );
-            if (settings.arc_profile == profile.id) arcProfileSelect.val(profile.id);
+            if (settings.arc_profile == profile.id) {
+                arcProfileSelect.val(profile.id);
+            }
         }
     }
 }
@@ -170,6 +205,8 @@ async function loadSettingsUI() {
     $('#rmr_chapter_query_prompt_template').attr('placeholder', defaultSettings.chapter_query_prompt_template);
     $('#rmr_arc_analyzer_system_prompt').attr('placeholder', defaultSettings.arc_analyzer_system_prompt || 'System-level instructions for arc analysis (optional)');
     $('#rmr_arc_analyzer_prompt_template').attr('placeholder', defaultSettings.arc_analyzer_prompt_template);
+    $('#rmr_timeline_fill_system_prompt').attr('placeholder', defaultSettings.timeline_fill_system_prompt || 'System-level instructions for timeline fill (optional)');
+    $('#rmr_timeline_fill_prompt_template').attr('placeholder', defaultSettings.timeline_fill_prompt_template);
 	const mode_div = $(`#rmr_chapter_end_mode`);
 	for (const end_mode in ChapterEndMode) {
 		mode_div.append(
@@ -293,6 +330,28 @@ async function loadSettingsUI() {
         }
     });
 
+    // Timeline fill profile dropdown
+    const timelineFillProfileSelect = $('#rmr_timeline_fill_profile');
+    timelineFillProfileSelect.on('input', () => {
+        const profile = timelineFillProfileSelect.val();
+        if (!profile.length) {
+            settings.timeline_fill_profile = null;
+            getContext().saveSettingsDebounced();
+            return;
+        }
+        const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
+        if (profileID >= 0) {
+            settings.timeline_fill_profile = profile;
+            getContext().saveSettingsDebounced();
+        }
+        else {
+            toastr.error("Non-existent profile selected.", "Timeline Memory");
+            timelineFillProfileSelect.val('');
+            settings.timeline_fill_profile = null;
+            getContext().saveSettingsDebounced();
+        }
+    });
+
     // Arc analyzer profile dropdown
     const arcProfileSelect = $('#rmr_arc_profile');
     arcProfileSelect.on('input', () => {
@@ -351,12 +410,16 @@ function loadPresetUI() {
     // Load query presets
     reloadPresetOptions('query');
 
+    // Load timeline fill presets
+    reloadPresetOptions('timeline_fill');
+
     // Load arc presets
     reloadPresetOptions('arc');
 
 	// Set current preset selections
     $('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
     $('#rmr_query_preset').val(settings.current_query_preset || '');
+    $('#rmr_timeline_fill_preset').val(settings.current_timeline_fill_preset || '');
     $('#rmr_arc_preset').val(settings.current_arc_preset || '');
 
 	// Handle preset selection changes
@@ -390,6 +453,19 @@ function loadPresetUI() {
         }
     });
 
+    $('#rmr_timeline_fill_preset').on('change', function() {
+        const presetId = $(this).val();
+        if (presetId) {
+            applyPreset('timeline_fill', presetId);
+            updatePresetButtons('timeline_fill', presetId);
+            refreshPromptFields();
+        } else {
+            settings.current_timeline_fill_preset = null;
+            getContext().saveSettingsDebounced();
+            updatePresetButtons('timeline_fill', null);
+        }
+    });
+
     $('#rmr_arc_preset').on('change', function() {
         const presetId = $(this).val();
         if (presetId) {
@@ -412,6 +488,10 @@ function loadPresetUI() {
     $('#rmr_update_query_preset').on('click', () => handleUpdatePreset('query'));
     $('#rmr_delete_query_preset').on('click', () => handleDeletePreset('query'));
 
+    $('#rmr_save_timeline_fill_preset').on('click', () => handleSavePreset('timeline_fill'));
+    $('#rmr_update_timeline_fill_preset').on('click', () => handleUpdatePreset('timeline_fill'));
+    $('#rmr_delete_timeline_fill_preset').on('click', () => handleDeletePreset('timeline_fill'));
+
     $('#rmr_save_arc_preset').on('click', () => handleSavePreset('arc'));
     $('#rmr_update_arc_preset').on('click', () => handleUpdatePreset('arc'));
     $('#rmr_delete_arc_preset').on('click', () => handleDeletePreset('arc'));
@@ -419,6 +499,7 @@ function loadPresetUI() {
 	// Update initial button states
     updatePresetButtons('summarize', settings.current_summarize_preset);
     updatePresetButtons('query', settings.current_query_preset);
+    updatePresetButtons('timeline_fill', settings.current_timeline_fill_preset);
     updatePresetButtons('arc', settings.current_arc_preset);
 
 	// Set up individual preset import/export handlers
@@ -426,6 +507,8 @@ function loadPresetUI() {
     $('#rmr_import_summarize_preset').on('click', () => handleImportPreset('summarize'));
     $('#rmr_export_query_preset').on('click', () => handleExportPreset('query'));
     $('#rmr_import_query_preset').on('click', () => handleImportPreset('query'));
+    $('#rmr_export_timeline_fill_preset').on('click', () => handleExportPreset('timeline_fill'));
+    $('#rmr_import_timeline_fill_preset').on('click', () => handleImportPreset('timeline_fill'));
     $('#rmr_export_arc_preset').on('click', () => handleExportPreset('arc'));
     $('#rmr_import_arc_preset').on('click', () => handleImportPreset('arc'));
 }
@@ -442,6 +525,7 @@ function handleExportPreset(presetType) {
 		a.href = url;
 		let currentPresetId = settings.current_summarize_preset;
 		if (presetType === 'query') currentPresetId = settings.current_query_preset;
+		if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
 		if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 		const presetLabel = findPresetById(presetType, currentPresetId)?.name || 'preset';
 		a.download = `${presetType}-${currentPresetId}-${presetLabel.replace(/[^a-z0-9]/gi, '_')}.json`;
@@ -503,6 +587,7 @@ async function handleImportPreset(presetType) {
 function reloadPresetOptions(presetType) {
     let selectId = '#rmr_summarize_preset';
     if (presetType === 'query') selectId = '#rmr_query_preset';
+    if (presetType === 'timeline_fill') selectId = '#rmr_timeline_fill_preset';
     if (presetType === 'arc') selectId = '#rmr_arc_preset';
     const select = $(selectId);
     const currentVal = select.val();
@@ -512,6 +597,7 @@ function reloadPresetOptions(presetType) {
 
     let presets = getSummarizePresets();
     if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
     if (presetType === 'arc') presets = getArcPresets();
 	presets.forEach(preset => {
 		select.append(
@@ -533,6 +619,10 @@ function updatePresetButtons(presetType, presetId) {
         updateButton = '#rmr_update_query_preset';
         deleteButton = '#rmr_delete_query_preset';
     }
+    if (presetType === 'timeline_fill') {
+        updateButton = '#rmr_update_timeline_fill_preset';
+        deleteButton = '#rmr_delete_timeline_fill_preset';
+    }
     if (presetType === 'arc') {
         updateButton = '#rmr_update_arc_preset';
         deleteButton = '#rmr_delete_arc_preset';
@@ -548,8 +638,11 @@ function refreshPromptFields() {
     $('#rmr_memory_prompt_template').val(settings.memory_prompt_template);
     $('#rmr_chapter_query_system_prompt').val(settings.chapter_query_system_prompt);
     $('#rmr_chapter_query_prompt_template').val(settings.chapter_query_prompt_template);
+    $('#rmr_timeline_fill_system_prompt').val(settings.timeline_fill_system_prompt);
+    $('#rmr_timeline_fill_prompt_template').val(settings.timeline_fill_prompt_template);
     $('#rmr_profile').val(settings.profile || '');
     $('#rmr_query_profile').val(settings.query_profile || '');
+    $('#rmr_timeline_fill_profile').val(settings.timeline_fill_profile || '');
     $('#rmr_arc_analyzer_system_prompt').val(settings.arc_analyzer_system_prompt);
     $('#rmr_arc_analyzer_prompt_template').val(settings.arc_analyzer_prompt_template);
     $('#rmr_arc_profile').val(settings.arc_profile || '');
@@ -562,6 +655,7 @@ function handleSavePreset(presetType) {
         reloadPresetOptions(presetType);
         let selectId = '#rmr_summarize_preset';
         if (presetType === 'query') selectId = '#rmr_query_preset';
+        if (presetType === 'timeline_fill') selectId = '#rmr_timeline_fill_preset';
         if (presetType === 'arc') selectId = '#rmr_arc_preset';
         $(selectId).val(preset.id);
 
@@ -569,6 +663,8 @@ function handleSavePreset(presetType) {
             settings.current_summarize_preset = preset.id;
         } else if (presetType === 'query') {
             settings.current_query_preset = preset.id;
+        } else if (presetType === 'timeline_fill') {
+            settings.current_timeline_fill_preset = preset.id;
         } else if (presetType === 'arc') {
             settings.current_arc_preset = preset.id;
         }
@@ -582,6 +678,7 @@ function handleSavePreset(presetType) {
 function handleUpdatePreset(presetType) {
     let currentPresetId = settings.current_summarize_preset;
     if (presetType === 'query') currentPresetId = settings.current_query_preset;
+    if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
     if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
@@ -600,6 +697,11 @@ function handleUpdatePreset(presetType) {
         systemPrompt = settings.chapter_query_system_prompt;
         userPrompt = settings.chapter_query_prompt_template;
         profile = settings.query_profile;
+        rateLimit = 0;
+    } else if (presetType === 'timeline_fill') {
+        systemPrompt = settings.timeline_fill_system_prompt;
+        userPrompt = settings.timeline_fill_prompt_template;
+        profile = settings.timeline_fill_profile;
         rateLimit = 0;
     } else if (presetType === 'arc') {
         systemPrompt = settings.arc_analyzer_system_prompt;
@@ -625,6 +727,7 @@ function handleUpdatePreset(presetType) {
 function handleDeletePreset(presetType) {
     let currentPresetId = settings.current_summarize_preset;
     if (presetType === 'query') currentPresetId = settings.current_query_preset;
+    if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
     if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
@@ -643,6 +746,7 @@ function handleDeletePreset(presetType) {
         reloadPresetOptions(presetType);
         let selectId = '#rmr_summarize_preset';
         if (presetType === 'query') selectId = '#rmr_query_preset';
+        if (presetType === 'timeline_fill') selectId = '#rmr_timeline_fill_preset';
         if (presetType === 'arc') selectId = '#rmr_arc_preset';
         $(selectId).val('');
         updatePresetButtons(presetType, null);
@@ -724,6 +828,10 @@ export function getQueryPresets() {
     return settings.query_presets || [];
 }
 
+export function getTimelineFillPresets() {
+    return settings.timeline_fill_presets || [];
+}
+
 export function getArcPresets() {
     return settings.arc_presets || [];
 }
@@ -732,6 +840,7 @@ export function findPresetById(presetType, presetId) {
     if (!presetId) return null;
     let presets = getSummarizePresets();
     if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
     if (presetType === 'arc') presets = getArcPresets();
     return presets.find(preset => preset.id === presetId) || null;
 }
@@ -750,6 +859,8 @@ export function createPreset(presetType, name, systemPrompt, userPrompt, profile
         settings.summarize_presets.push(preset);
     } else if (presetType === 'query') {
         settings.query_presets.push(preset);
+    } else if (presetType === 'timeline_fill') {
+        settings.timeline_fill_presets.push(preset);
     } else if (presetType === 'arc') {
         settings.arc_presets.push(preset);
     }
@@ -761,6 +872,7 @@ export function createPreset(presetType, name, systemPrompt, userPrompt, profile
 export function updatePreset(presetType, presetId, updates) {
     let presets = getSummarizePresets();
     if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
     if (presetType === 'arc') presets = getArcPresets();
     const presetIndex = presets.findIndex(preset => preset.id === presetId);
 
@@ -774,6 +886,7 @@ export function updatePreset(presetType, presetId, updates) {
 export function deletePreset(presetType, presetId) {
     let presets = getSummarizePresets();
     if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
     if (presetType === 'arc') presets = getArcPresets();
     const presetIndex = presets.findIndex(preset => preset.id === presetId);
 
@@ -786,6 +899,8 @@ export function deletePreset(presetType, presetId) {
         settings.current_summarize_preset = null;
     } else if (presetType === 'query' && settings.current_query_preset === presetId) {
         settings.current_query_preset = null;
+    } else if (presetType === 'timeline_fill' && settings.current_timeline_fill_preset === presetId) {
+        settings.current_timeline_fill_preset = null;
     } else if (presetType === 'arc' && settings.current_arc_preset === presetId) {
         settings.current_arc_preset = null;
     }
@@ -814,6 +929,13 @@ export function applyPreset(presetType, presetId) {
         // Only set profile if preset has one, otherwise keep current setting
         if (preset.profile !== null && preset.profile !== undefined) {
             settings.query_profile = preset.profile;
+        }
+    } else if (presetType === 'timeline_fill') {
+        settings.current_timeline_fill_preset = presetId;
+        settings.timeline_fill_system_prompt = preset.systemPrompt;
+        settings.timeline_fill_prompt_template = preset.userPrompt;
+        if (preset.profile !== null && preset.profile !== undefined) {
+            settings.timeline_fill_profile = preset.profile;
         }
     } else if (presetType === 'arc') {
         settings.current_arc_preset = presetId;
@@ -844,6 +966,11 @@ export function createPresetFromCurrentSettings(presetType) {
         userPrompt = settings.chapter_query_prompt_template;
         profile = settings.query_profile;
         rateLimit = 0; // Query presets don't use rate limiting
+    } else if (presetType === 'timeline_fill') {
+        systemPrompt = settings.timeline_fill_system_prompt;
+        userPrompt = settings.timeline_fill_prompt_template;
+        profile = settings.timeline_fill_profile;
+        rateLimit = 0;
     } else if (presetType === 'arc') {
         systemPrompt = settings.arc_analyzer_system_prompt;
         userPrompt = settings.arc_analyzer_prompt_template;
@@ -854,6 +981,7 @@ export function createPresetFromCurrentSettings(presetType) {
 	// Check for existing preset with same name
     let existingPresets = getSummarizePresets();
     if (presetType === 'query') existingPresets = getQueryPresets();
+    if (presetType === 'timeline_fill') existingPresets = getTimelineFillPresets();
     if (presetType === 'arc') existingPresets = getArcPresets();
 	const existingPreset = existingPresets.find(p => p.name.toLowerCase() === name.toLowerCase());
 
@@ -910,6 +1038,7 @@ export function exportCurrentPreset(presetType) {
 function findDuplicatePreset(presetType, presetName) {
     let presets = getSummarizePresets();
     if (presetType === 'query') presets = getQueryPresets();
+    if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
     if (presetType === 'arc') presets = getArcPresets();
     return presets.find(preset => preset.name.toLowerCase() === presetName.toLowerCase());
 }
@@ -950,7 +1079,7 @@ export async function importPreset(jsonData) {
 		}
 
 		const presetType = importData.type;
-        if (presetType !== 'summarize' && presetType !== 'query' && presetType !== 'arc') {
+        if (presetType !== 'summarize' && presetType !== 'query' && presetType !== 'timeline_fill' && presetType !== 'arc') {
             throw new Error('Invalid preset file: unknown preset type');
         }
 
@@ -994,6 +1123,8 @@ export async function importPreset(jsonData) {
             settings.summarize_presets.push(finalPreset);
         } else if (presetType === 'query') {
             settings.query_presets.push(finalPreset);
+        } else if (presetType === 'timeline_fill') {
+            settings.timeline_fill_presets.push(finalPreset);
         } else if (presetType === 'arc') {
             settings.arc_presets.push(finalPreset);
         }

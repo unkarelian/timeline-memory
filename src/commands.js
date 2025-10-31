@@ -2,8 +2,8 @@ import { extension_settings, getContext } from "../../../../extensions.js";
 import { commonEnumProviders } from '../../../../slash-commands/SlashCommandCommonEnumsProvider.js';
 import { enumTypes, SlashCommandEnumValue } from "../../../../slash-commands/SlashCommandEnumValue.js";
 import { saveChatConditional, reloadCurrentChat, systemUserName } from "../../../../../script.js";
-import { stringToRange } from "../../../../utils.js";
-import { endChapter, queryChapter, queryChapters, loadTimelineData, removeChapterFromTimeline, migrateTimelineData, getChapterSummary, resummarizeChapter } from "./memories.js";
+import { stringToRange, isTrueBoolean } from "../../../../utils.js";
+import { endChapter, queryChapter, queryChapters, loadTimelineData, removeChapterFromTimeline, migrateTimelineData, getChapterSummary, resummarizeChapter, runTimelineFill, getTimelineFillResults } from "./memories.js";
 import { settings } from "./settings.js";
 import { debug } from "./logging.js";
 import { toggleChapterHighlight } from "./messages.js";
@@ -454,6 +454,93 @@ export function loadSlashCommands() {
 			}),
 		],
 		helpString: 'Query a range of chapters from the timeline with a question.',
+	}));
+
+	parser.addCommandObject(command.fromProps({
+		name: 'timeline-fill',
+		callback: async (args) => {
+			const shouldAwait = isTrueBoolean(args?.await);
+
+			const executeFill = async () => {
+				try {
+					let profileOverride;
+					if (args.profile !== undefined) {
+						profileOverride = profileIdFromName(args.profile);
+						if (!profileOverride) {
+							toastr.error(`Profile "${args.profile}" not found.`, 'Timeline Memory');
+							return;
+						}
+					}
+
+					const results = await runTimelineFill({ profileOverride, quiet: true });
+					const successCount = results.filter(result => !result.error).length;
+					const errorCount = results.length - successCount;
+
+					if (results.length === 0) {
+						toastr.info('Timeline fill finished with no queries to run.', 'Timeline Memory');
+					} else if (errorCount === 0) {
+						toastr.success(`Timeline fill stored ${successCount} result${successCount === 1 ? '' : 's'} in {{timelineResponses}}.`, 'Timeline Memory');
+					} else {
+						toastr.warning(`Timeline fill stored ${successCount} result${successCount === 1 ? '' : 's'}; ${errorCount} errored. Check console for details.`, 'Timeline Memory');
+					}
+				} catch (error) {
+					console.error('Timeline fill command failed:', error);
+					toastr.error(error?.message || 'Timeline fill failed.', 'Timeline Memory');
+				}
+			};
+
+			const promise = executeFill();
+
+			if (shouldAwait) {
+				await promise;
+			}
+
+			return '';
+		},
+		namedArgumentList: [
+			namedArg.fromProps({
+				name: 'profile',
+				description: 'Name of a connection profile to override the timeline fill profile',
+				enumProvider: profilesProvider,
+				isRequired: false,
+			}),
+			namedArg.fromProps({
+				name: 'await',
+				description: 'Await completion before running subsequent slash commands',
+				typeList: [arg_types.BOOLEAN],
+				isRequired: false,
+				defaultValue: 'false',
+			}),
+		],
+		helpString: 'Generate timeline queries via the configured profile, execute them, and store results in {{timelineResponses}}.',
+	}));
+
+	parser.addCommandObject(command.fromProps({
+		name: 'timeline-fill-status',
+		callback: () => {
+			const results = getTimelineFillResults();
+			if (!results.length) {
+				toastr.info('No timeline fill results stored.', 'Timeline Memory');
+				return '';
+			}
+
+			const preview = results.slice(0, 5).map((entry, index) => {
+				const range = entry.startChapter === entry.endChapter
+					? `Chapter ${entry.startChapter}`
+					: `Chapters ${entry.startChapter}-${entry.endChapter}`;
+				const status = entry.error ? '⚠️' : '✅';
+				const truncatedQuery = entry.query.length > 80 ? `${entry.query.substring(0, 77)}…` : entry.query;
+				return `${status} ${index + 1}. ${range}: ${truncatedQuery}`;
+			}).join('\n');
+
+			toastr.info(preview, 'Timeline Memory');
+			if (results.length > 5) {
+				toastr.info(`Showing first 5 of ${results.length} stored results.`, 'Timeline Memory');
+			}
+			debug('Timeline fill status results:', results);
+			return '';
+		},
+		helpString: 'Preview stored timeline fill results without using the macro.',
 	}));
 
 	parser.addCommandObject(command.fromProps({
