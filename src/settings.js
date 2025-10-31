@@ -1004,6 +1004,7 @@ export function createPresetFromCurrentSettings(presetType) {
 export function exportCurrentPreset(presetType) {
     let currentPresetId = settings.current_summarize_preset;
     if (presetType === 'query') currentPresetId = settings.current_query_preset;
+    if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
     if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
