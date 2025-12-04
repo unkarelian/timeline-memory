@@ -41,7 +41,6 @@ jQuery(async () => {
 		eventSource.on(event_types.USER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHAT_CHANGED, (chatId)=>{
-			resetTimelineFillResults();
 			if (!chatId) return;
 			loadTimelineData();
 			resetMessageButtons();

@@ -203,16 +203,28 @@ export function getTimelineFillResults() {
 	return Array.isArray(timelineFillResults) ? [...timelineFillResults] : [];
 }
 
+// Save timeline fill results to chat metadata
+function saveTimelineFillResults() {
+	const context = getContext();
+	if (!context.chatMetadata) {
+		context.chatMetadata = {};
+	}
+	context.chatMetadata.timelineFillResults = timelineFillResults;
+	context.saveMetadata();
+}
+
 export function setTimelineFillResults(results) {
 	if (Array.isArray(results)) {
 		timelineFillResults = [...results];
 	} else {
 		timelineFillResults = [];
 	}
+	saveTimelineFillResults();
 }
 
 export function resetTimelineFillResults() {
 	timelineFillResults = [];
+	saveTimelineFillResults();
 }
 
 export function getTimelineEntries() {
@@ -497,6 +509,12 @@ export function loadTimelineData() {
 		timelineData = context.chatMetadata.timeline;
 	} else {
 		timelineData = [];
+	}
+	// Also load timeline fill results from metadata
+	if (Array.isArray(context.chatMetadata?.timelineFillResults)) {
+		timelineFillResults = context.chatMetadata.timelineFillResults;
+	} else {
+		timelineFillResults = [];
 	}
 }
 
