@@ -3,7 +3,7 @@ import { commonEnumProviders } from '../../../../slash-commands/SlashCommandComm
 import { enumTypes, SlashCommandEnumValue } from "../../../../slash-commands/SlashCommandEnumValue.js";
 import { saveChatConditional, reloadCurrentChat, systemUserName } from "../../../../../script.js";
 import { stringToRange, isTrueBoolean } from "../../../../utils.js";
-import { endChapter, queryChapter, queryChapters, loadTimelineData, removeChapterFromTimeline, migrateTimelineData, getChapterSummary, resummarizeChapter, runTimelineFill, getTimelineFillResults } from "./memories.js";
+import { endChapter, queryChapter, queryChapters, loadTimelineData, removeChapterFromTimeline, migrateTimelineData, getChapterSummary, resummarizeChapter, runTimelineFill, getTimelineFillResults, getTimelineEntries } from "./memories.js";
 import { settings } from "./settings.js";
 import { debug } from "./logging.js";
 import { toggleChapterHighlight } from "./messages.js";
@@ -39,6 +39,10 @@ function profileIdFromName(profile_name) {
 	const profile = extension_settings.connectionManager.profiles.find(p => p.name == profile_name);
 	if (profile) return profile.id;
 	return '';
+}
+
+function shouldRegisterTimelineTools() {
+	return Boolean(settings?.tools_enabled && settings?.is_enabled !== false);
 }
 
 
@@ -175,13 +179,19 @@ async function removeToolCalls() {
 // Register tool/function call for chapter queries
 function registerChapterQueryTool() {
 	const context = getContext();
-	if (!context.ToolManager || !settings.tools_enabled) return;
+	if (!context.ToolManager) return;
+
+	// Clear stale definitions before re-registering
+	context.ToolManager.unregisterFunctionTool('query_timeline_chapter');
+	context.ToolManager.unregisterFunctionTool('query_timeline_chapters');
+
+	if (!shouldRegisterTimelineTools()) return;
 
 	context.ToolManager.registerFunctionTool({
 		name: 'query_timeline_chapter',
 		displayName: 'Query Timeline Chapter',
 		description: 'Query a specific chapter from the chat timeline with a question',
-		stealth: false,  // Make this a stealth tool to prevent automatic follow-up generation
+		stealth: false,  // Keep visible tool results and allow the model to follow up
 		parameters: {
 			type: 'object',
 			properties: {
@@ -202,6 +212,7 @@ function registerChapterQueryTool() {
 			const result = await queryChapter(args.chapterNumber, args.query);
 			return result;
 		},
+		shouldRegister: shouldRegisterTimelineTools,
 		formatMessage: (args) => {
 			return `Querying chapter ${args.chapterNumber} with: "${args.query}"`;
 		}
@@ -238,6 +249,7 @@ function registerChapterQueryTool() {
 			const result = await queryChapters(args.startChapter, args.endChapter, args.query);
 			return result;
 		},
+		shouldRegister: shouldRegisterTimelineTools,
 		formatMessage: (args) => {
 			const range = args.startChapter === args.endChapter 
 				? `chapter ${args.startChapter}` 
@@ -587,6 +599,75 @@ export function loadSlashCommands() {
 	}));
 
 	parser.addCommandObject(command.fromProps({
+		name: 'timeline-remove',
+		aliases: ['chapter-remove', 'remove-chapter'],
+		callback: (args, value) => {
+			loadTimelineData();
+			const timeline = getTimelineEntries();
+			const input = args.chapter ?? value;
+
+			if (!timeline.length) {
+				toastr.warning('No chapters in the timeline to remove', 'Timeline Memory');
+				return '';
+			}
+
+			if (input === undefined || input === null || input === '') {
+				toastr.error('Chapter number is required', 'Timeline Memory');
+				return '';
+			}
+
+			const chapterNumber = parseInt(input);
+			if (isNaN(chapterNumber)) {
+				toastr.error('Invalid chapter number', 'Timeline Memory');
+				return '';
+			}
+
+			if (chapterNumber < 1 || chapterNumber > timeline.length) {
+				toastr.error(`Chapter ${chapterNumber} is out of range (1-${timeline.length})`, 'Timeline Memory');
+				return '';
+			}
+
+			const chapter = timeline[chapterNumber - 1];
+			const removed = removeChapterFromTimeline(chapter.endMsgId);
+
+			if (!removed) {
+				toastr.error('Failed to remove the chapter from the timeline', 'Timeline Memory');
+				return '';
+			}
+
+			const chat = getContext().chat;
+			if (chat?.[chapter.endMsgId]?.extra?.rmr_chapter) {
+				chat[chapter.endMsgId].extra.rmr_chapter = false;
+				getContext().saveChat();
+			}
+
+			const button = $(`.mes[mesid="${chapter.endMsgId}"] .rmr-button.rmr-chapter-point`);
+			if (button.length) {
+				toggleChapterHighlight(button, chapter.endMsgId);
+			}
+
+			toastr.success(`Chapter ${chapterNumber} removed from the timeline`, 'Timeline Memory');
+			return `Removed chapter ${chapterNumber}`;
+		},
+		unnamedArgumentList: [
+			commandArg.fromProps({
+				description: 'Chapter number to remove (1-based)',
+				typeList: [arg_types.NUMBER],
+				isRequired: false,
+			}),
+		],
+		namedArgumentList: [
+			namedArg.fromProps({
+				name: 'chapter',
+				description: 'Chapter number to remove (1-based)',
+				typeList: [arg_types.NUMBER],
+				isRequired: false,
+			}),
+		],
+		helpString: 'Force removes a chapter entry from the timeline by number, even if the chat marker is missing.',
+	}));
+
+	parser.addCommandObject(command.fromProps({
 		name: 'timeline-migrate',
 		callback: (args, value) => {
 			loadTimelineData();
@@ -713,7 +794,7 @@ export function updateToolRegistration() {
 	// Check if settings is initialized before accessing it
 	if (!settings) return;
 
-	if (settings.tools_enabled) {
+	if (shouldRegisterTimelineTools()) {
 		registerChapterQueryTool();
 	} else {
 		context.ToolManager.unregisterFunctionTool('query_timeline_chapter');

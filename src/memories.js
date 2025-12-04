@@ -12,6 +12,7 @@ import { reasoning_templates } from "../../../../../scripts/reasoning.js";
 import { getPresetManager } from "../../../../../scripts/preset-manager.js";
 
 const runSlashCommand = getContext().executeSlashCommandsWithOptions;
+const CHAT_COMPLETION_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
 
 /**
  * Get the reasoning effort value based on the profile's chat completion source.
@@ -36,9 +37,8 @@ function getReasoningEffort(profileId) {
 		if (profile.preset) {
 			// Claude and other chat completion sources use the 'openai' preset manager
 			let presetManagerApi = profile.api;
-			const chatCompletionApis = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite','vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations'];
 
-			if (chatCompletionApis.includes(profile.api) || profile.api === 'openai') {
+			if (CHAT_COMPLETION_APIS.includes(profile.api) || profile.api === 'openai') {
 				presetManagerApi = 'openai';
 			}
 
@@ -123,6 +123,66 @@ function getReasoningEffort(profileId) {
 	}
 }
 
+/**
+ * Determine whether to include reasoning content for a profile.
+ * Currently only applies to z.ai which expects an explicit thinking flag.
+ * @param {string} profileId - The connection profile ID
+ * @returns {boolean|undefined} True/false for include_reasoning, or undefined when not applicable
+ */
+function getIncludeReasoning(profileId) {
+	try {
+		const profiles = extension_settings?.connectionManager?.profiles || [];
+		const profile = profiles.find(p => p.id === profileId);
+
+		if (!profile) {
+			debug('Profile not found for include_reasoning:', profileId);
+			return undefined;
+		}
+
+		if (profile.api !== 'zai') {
+			return undefined;
+		}
+
+		let includeReasoning = null;
+
+		if (profile.preset) {
+			let presetManagerApi = profile.api;
+			if (CHAT_COMPLETION_APIS.includes(profile.api) || profile.api === 'openai') {
+				presetManagerApi = 'openai';
+			}
+
+			const presetManager = getPresetManager(presetManagerApi);
+			if (presetManager) {
+				if (presetManagerApi === 'openai') {
+					const openaiPresets = presetManager.getAllPresets();
+					const presetIndex = openaiPresets.indexOf(profile.preset);
+
+					if (presetIndex >= 0 && openai_settings[presetIndex]) {
+						includeReasoning = openai_settings[presetIndex].show_thoughts;
+						debug('Found include_reasoning from preset:', includeReasoning);
+					}
+				} else {
+					const presetSettings = presetManager.getPresetSettings(profile.preset);
+					if (presetSettings && typeof presetSettings.show_thoughts === 'boolean') {
+						includeReasoning = presetSettings.show_thoughts;
+						debug('Found include_reasoning from preset:', includeReasoning);
+					}
+				}
+			}
+		}
+
+		if (includeReasoning === null || includeReasoning === undefined) {
+			includeReasoning = oai_settings.show_thoughts;
+			debug('Using default include_reasoning:', includeReasoning);
+		}
+
+		return Boolean(includeReasoning);
+	} catch (error) {
+		debug('Error getting include_reasoning for profile:', error);
+		return undefined;
+	}
+}
+
 // Store timeline data
 let timelineData = [];
 let timelineFillResults = [];
@@ -155,6 +215,10 @@ export function resetTimelineFillResults() {
 	timelineFillResults = [];
 }
 
+export function getTimelineEntries() {
+	return Array.isArray(timelineData) ? [...timelineData] : [];
+}
+
 /**
  * Get the max tokens setting for the current connection or a specific profile
  * @param {string} profileId - The connection profile ID (optional)
@@ -183,6 +247,8 @@ async function getMaxTokensForProfile(profileId) {
 			case 'aimlapi':
 			case 'xai':
 			case 'pollinations':
+			case 'moonshot':
+			case 'zai':
 				// All chat completion sources use openai_max_tokens
 				return oai_settings.openai_max_tokens || amount_gen || 2048;
 			default:
@@ -206,9 +272,8 @@ async function getMaxTokensForProfile(profileId) {
 		if (profile.preset) {
 			// Claude and other chat completion sources use the 'openai' preset manager
 			let presetManagerApi = profile.api;
-			const chatCompletionApis = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite','vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations'];
 
-			if (chatCompletionApis.includes(profile.api) || profile.api === 'openai') {
+			if (CHAT_COMPLETION_APIS.includes(profile.api) || profile.api === 'openai') {
 				presetManagerApi = 'openai';
 				debug('Using openai preset manager for chat completion API:', profile.api);
 			}
@@ -266,6 +331,8 @@ async function getMaxTokensForProfile(profileId) {
 				case 'aimlapi':
 				case 'xai':
 				case 'pollinations':
+				case 'moonshot':
+				case 'zai':
 					// All chat completion sources use openai_max_tokens
 					maxTokens = presetSettings.openai_max_tokens;
 					debug('Chat completion max tokens (openai_max_tokens):', maxTokens);
@@ -751,6 +818,12 @@ async function genSummaryWithSlash(history, id=0) {
 				overridePayload.reasoning_effort = reasoningEffort;
 			}
 
+			// z.ai requires an explicit flag to return reasoning content
+			const includeReasoning = getIncludeReasoning(profileId);
+			if (includeReasoning !== undefined) {
+				overridePayload.include_reasoning = includeReasoning;
+			}
+
 			// Use ConnectionManagerRequestService to send the request
 			const result = await ConnectionManagerRequestService.sendRequest(
 				profileId,              // profileId
@@ -1037,6 +1110,10 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 		if (reasoningEffort !== undefined) {
 			overridePayload.reasoning_effort = reasoningEffort;
 		}
+		const includeReasoning = getIncludeReasoning(profileId);
+		if (includeReasoning !== undefined) {
+			overridePayload.include_reasoning = includeReasoning;
+		}
 
 		const result = await ConnectionManagerRequestService.sendRequest(
 			profileId,
@@ -1235,6 +1312,10 @@ export async function queryChapter(chapterNumber, query) {
 			if (reasoningEffort !== undefined) {
 				overridePayload.reasoning_effort = reasoningEffort;
 			}
+			const includeReasoning = getIncludeReasoning(settings.query_profile);
+			if (includeReasoning !== undefined) {
+				overridePayload.include_reasoning = includeReasoning;
+			}
 
 			// Use ConnectionManagerRequestService to send the request
 			const result = await ConnectionManagerRequestService.sendRequest(
@@ -1386,6 +1467,10 @@ export async function queryChapters(startChapter, endChapter, query) {
 			// Add reasoning_effort to override payload if it exists
 			if (reasoningEffort !== undefined) {
 				overridePayload.reasoning_effort = reasoningEffort;
+			}
+			const includeReasoning = getIncludeReasoning(settings.query_profile);
+			if (includeReasoning !== undefined) {
+				overridePayload.include_reasoning = includeReasoning;
 			}
 
 			// Use ConnectionManagerRequestService to send the request
@@ -1753,6 +1838,8 @@ export async function analyzeArcs(profileOverride = null) {
         const overridePayload = buildOverridePayload(profileId, maxTokens);
         const reasoningEffort = getReasoningEffort(profileId);
         if (reasoningEffort !== undefined) overridePayload.reasoning_effort = reasoningEffort;
+        const includeReasoning = getIncludeReasoning(profileId);
+        if (includeReasoning !== undefined) overridePayload.include_reasoning = includeReasoning;
 
         // Send via ConnectionManagerRequestService
         const result = await ConnectionManagerRequestService.sendRequest(

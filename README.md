@@ -91,6 +91,10 @@ Query a specific chapter from the timeline
 Remove a chapter end marker and its timeline entry
 - `id`: Message ID (defaults to most recent)
 
+### `/timeline-remove {n}`
+Force remove a chapter entry from the timeline by chapter number (helpful if a marker was not cleaned up correctly)
+- `n`: Chapter number to remove (1-based)
+
 ### `/timeline-migrate`
 Migrate old timeline entries to the new format by removing timestamps. Use this command if you have timeline entries created before version 2.1.0.
 - No arguments required
