@@ -12,6 +12,17 @@
 					Enable Tool/Function Calls for Chapter Queries
 				</label>
 			</div>
+			<div class="rmr-extension_block">
+				<div class="master-export-import">
+					<span class="master-label">Configuration:</span>
+					<button type="button" class="menu_button" id="rmr_master_export">
+						<i class="fa-solid fa-file-export"></i> Export All
+					</button>
+					<button type="button" class="menu_button" id="rmr_master_import">
+						<i class="fa-solid fa-file-import"></i> Import All
+					</button>
+				</div>
+			</div>
 			<hr>
 			<h4>Arc Analyzer</h4>
 			<div class="rmr-extension_block">
@@ -265,5 +276,22 @@
 .preset-import-export .menu_button.small {
 	font-size: 11px;
 	padding: 3px 6px;
+}
+
+.master-export-import {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 5px;
+}
+
+.master-export-import .master-label {
+	font-weight: 500;
+}
+
+.master-export-import .menu_button {
+	display: flex;
+	align-items: center;
+	gap: 5px;
 }
 </style>

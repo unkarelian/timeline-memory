@@ -511,6 +511,10 @@ function loadPresetUI() {
     $('#rmr_import_timeline_fill_preset').on('click', () => handleImportPreset('timeline_fill'));
     $('#rmr_export_arc_preset').on('click', () => handleExportPreset('arc'));
     $('#rmr_import_arc_preset').on('click', () => handleImportPreset('arc'));
+
+    // Set up master export/import handlers
+    $('#rmr_master_export').on('click', handleMasterExport);
+    $('#rmr_master_import').on('click', handleMasterImport);
 }
 
 // Handle export single preset
@@ -1147,4 +1151,330 @@ function validatePreset(preset) {
 	if (!preset.userPrompt || typeof preset.userPrompt !== 'string') return false;
 	// profile and rateLimit are optional
 	return true;
+}
+
+// Master export - export all settings and presets
+export function exportAllSettings() {
+	const exportData = {
+		version: '1.0',
+		extension: 'timeline-memory',
+		timestamp: new Date().toISOString(),
+		settings: {
+			// Core settings
+			is_enabled: settings.is_enabled,
+			tools_enabled: settings.tools_enabled,
+			show_buttons: settings.show_buttons,
+			hide_chapter: settings.hide_chapter,
+			add_chunk_summaries: settings.add_chunk_summaries,
+			chapter_end_mode: settings.chapter_end_mode,
+			rate_limit: settings.rate_limit,
+
+			// Custom prompts (used when no preset selected)
+			memory_system_prompt: settings.memory_system_prompt,
+			memory_prompt_template: settings.memory_prompt_template,
+			chapter_query_system_prompt: settings.chapter_query_system_prompt,
+			chapter_query_prompt_template: settings.chapter_query_prompt_template,
+			timeline_fill_system_prompt: settings.timeline_fill_system_prompt,
+			timeline_fill_prompt_template: settings.timeline_fill_prompt_template,
+			arc_analyzer_system_prompt: settings.arc_analyzer_system_prompt,
+			arc_analyzer_prompt_template: settings.arc_analyzer_prompt_template,
+
+			// Current preset selections
+			current_summarize_preset: settings.current_summarize_preset,
+			current_query_preset: settings.current_query_preset,
+			current_timeline_fill_preset: settings.current_timeline_fill_preset,
+			current_arc_preset: settings.current_arc_preset
+		},
+		presets: {
+			summarize: settings.summarize_presets.map(p => ({
+				id: p.id,
+				name: p.name,
+				systemPrompt: p.systemPrompt,
+				userPrompt: p.userPrompt,
+				rateLimit: p.rateLimit
+			})),
+			query: settings.query_presets.map(p => ({
+				id: p.id,
+				name: p.name,
+				systemPrompt: p.systemPrompt,
+				userPrompt: p.userPrompt,
+				rateLimit: p.rateLimit
+			})),
+			timeline_fill: settings.timeline_fill_presets.map(p => ({
+				id: p.id,
+				name: p.name,
+				systemPrompt: p.systemPrompt,
+				userPrompt: p.userPrompt,
+				rateLimit: p.rateLimit
+			})),
+			arc: settings.arc_presets.map(p => ({
+				id: p.id,
+				name: p.name,
+				systemPrompt: p.systemPrompt,
+				userPrompt: p.userPrompt,
+				rateLimit: p.rateLimit
+			}))
+		}
+	};
+
+	return JSON.stringify(exportData, null, 2);
+}
+
+// Master import - import all settings and presets
+export async function importAllSettings(jsonData) {
+	try {
+		const importData = JSON.parse(jsonData);
+
+		// Validate import data structure
+		if (!importData.extension || importData.extension !== 'timeline-memory') {
+			throw new Error('Invalid export file: not a Timeline Memory configuration');
+		}
+
+		if (!importData.settings || !importData.presets) {
+			throw new Error('Invalid export file: missing settings or presets data');
+		}
+
+		// Show confirmation dialog with import options
+		const result = await showMasterImportDialog(importData);
+
+		if (result.action === 'cancel') {
+			throw new Error('Import cancelled by user');
+		}
+
+		// Import settings
+		if (result.importSettings) {
+			// Core settings
+			if (importData.settings.is_enabled !== undefined) settings.is_enabled = importData.settings.is_enabled;
+			if (importData.settings.tools_enabled !== undefined) settings.tools_enabled = importData.settings.tools_enabled;
+			if (importData.settings.show_buttons !== undefined) settings.show_buttons = importData.settings.show_buttons;
+			if (importData.settings.hide_chapter !== undefined) settings.hide_chapter = importData.settings.hide_chapter;
+			if (importData.settings.add_chunk_summaries !== undefined) settings.add_chunk_summaries = importData.settings.add_chunk_summaries;
+			if (importData.settings.chapter_end_mode !== undefined) settings.chapter_end_mode = importData.settings.chapter_end_mode;
+			if (importData.settings.rate_limit !== undefined) settings.rate_limit = importData.settings.rate_limit;
+
+			// Prompts
+			if (importData.settings.memory_system_prompt !== undefined) settings.memory_system_prompt = importData.settings.memory_system_prompt;
+			if (importData.settings.memory_prompt_template !== undefined) settings.memory_prompt_template = importData.settings.memory_prompt_template;
+			if (importData.settings.chapter_query_system_prompt !== undefined) settings.chapter_query_system_prompt = importData.settings.chapter_query_system_prompt;
+			if (importData.settings.chapter_query_prompt_template !== undefined) settings.chapter_query_prompt_template = importData.settings.chapter_query_prompt_template;
+			if (importData.settings.timeline_fill_system_prompt !== undefined) settings.timeline_fill_system_prompt = importData.settings.timeline_fill_system_prompt;
+			if (importData.settings.timeline_fill_prompt_template !== undefined) settings.timeline_fill_prompt_template = importData.settings.timeline_fill_prompt_template;
+			if (importData.settings.arc_analyzer_system_prompt !== undefined) settings.arc_analyzer_system_prompt = importData.settings.arc_analyzer_system_prompt;
+			if (importData.settings.arc_analyzer_prompt_template !== undefined) settings.arc_analyzer_prompt_template = importData.settings.arc_analyzer_prompt_template;
+		}
+
+		// Import presets
+		if (result.importPresets) {
+			const presetTypes = ['summarize', 'query', 'timeline_fill', 'arc'];
+
+			for (const presetType of presetTypes) {
+				const importedPresets = importData.presets[presetType] || [];
+
+				for (const importedPreset of importedPresets) {
+					if (!validatePreset(importedPreset)) continue;
+
+					// Check for existing preset with same name
+					const existingPreset = findDuplicatePreset(presetType, importedPreset.name);
+
+					if (existingPreset) {
+						if (result.presetConflict === 'skip') {
+							continue; // Skip duplicates
+						} else if (result.presetConflict === 'overwrite') {
+							// Overwrite existing preset
+							updatePreset(presetType, existingPreset.id, {
+								systemPrompt: importedPreset.systemPrompt,
+								userPrompt: importedPreset.userPrompt,
+								rateLimit: importedPreset.rateLimit || 0
+							});
+						}
+						// 'merge' adds as new with different ID (falls through below)
+						else if (result.presetConflict === 'merge') {
+							// Add as new preset with new ID
+							createPreset(
+								presetType,
+								importedPreset.name,
+								importedPreset.systemPrompt,
+								importedPreset.userPrompt,
+								null,
+								importedPreset.rateLimit || 0
+							);
+						}
+					} else {
+						// No duplicate, create new preset
+						createPreset(
+							presetType,
+							importedPreset.name,
+							importedPreset.systemPrompt,
+							importedPreset.userPrompt,
+							null,
+							importedPreset.rateLimit || 0
+						);
+					}
+				}
+			}
+		}
+
+		// Restore current preset selections if importing settings
+		if (result.importSettings && result.importPresets) {
+			// Only restore selection if the preset exists
+			if (importData.settings.current_summarize_preset) {
+				const preset = findPresetById('summarize', importData.settings.current_summarize_preset);
+				if (preset) settings.current_summarize_preset = preset.id;
+			}
+			if (importData.settings.current_query_preset) {
+				const preset = findPresetById('query', importData.settings.current_query_preset);
+				if (preset) settings.current_query_preset = preset.id;
+			}
+			if (importData.settings.current_timeline_fill_preset) {
+				const preset = findPresetById('timeline_fill', importData.settings.current_timeline_fill_preset);
+				if (preset) settings.current_timeline_fill_preset = preset.id;
+			}
+			if (importData.settings.current_arc_preset) {
+				const preset = findPresetById('arc', importData.settings.current_arc_preset);
+				if (preset) settings.current_arc_preset = preset.id;
+			}
+		}
+
+		getContext().saveSettingsDebounced();
+
+		return {
+			settingsImported: result.importSettings,
+			presetsImported: result.importPresets,
+			presetConflict: result.presetConflict
+		};
+
+	} catch (error) {
+		console.error('Error importing settings:', error);
+		throw new Error(`Failed to import settings: ${error.message}`);
+	}
+}
+
+// Show dialog for master import options
+async function showMasterImportDialog(importData) {
+	return new Promise((resolve) => {
+		const presetCounts = {
+			summarize: (importData.presets.summarize || []).length,
+			query: (importData.presets.query || []).length,
+			timeline_fill: (importData.presets.timeline_fill || []).length,
+			arc: (importData.presets.arc || []).length
+		};
+		const totalPresets = presetCounts.summarize + presetCounts.query + presetCounts.timeline_fill + presetCounts.arc;
+
+		const message = `Timeline Memory Configuration Import\n\n` +
+			`This file contains:\n` +
+			`• Settings configuration\n` +
+			`• ${totalPresets} presets (${presetCounts.summarize} summarize, ${presetCounts.query} query, ${presetCounts.timeline_fill} timeline fill, ${presetCounts.arc} arc)\n\n` +
+			`How would you like to handle preset name conflicts?\n\n` +
+			`Click OK to import all and OVERWRITE duplicates\n` +
+			`Click Cancel to abort import`;
+
+		const confirmed = confirm(message);
+
+		if (!confirmed) {
+			resolve({ action: 'cancel' });
+			return;
+		}
+
+		resolve({
+			action: 'import',
+			importSettings: true,
+			importPresets: true,
+			presetConflict: 'overwrite'
+		});
+	});
+}
+
+// Handle master export button click
+function handleMasterExport() {
+	try {
+		const exportData = exportAllSettings();
+
+		// Create blob and download
+		const blob = new Blob([exportData], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `timeline-memory-config-${new Date().toISOString().split('T')[0]}.json`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+
+		toastr.success('Configuration exported successfully.');
+	} catch (error) {
+		console.error('Master export error:', error);
+		toastr.error(`Failed to export configuration: ${error.message}`);
+	}
+}
+
+// Handle master import button click
+async function handleMasterImport() {
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = '.json';
+
+	input.onchange = async function(event) {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onload = async function(e) {
+			try {
+				const jsonData = e.target.result;
+				const result = await importAllSettings(jsonData);
+
+				// Reload all preset options
+				reloadPresetOptions('summarize');
+				reloadPresetOptions('query');
+				reloadPresetOptions('timeline_fill');
+				reloadPresetOptions('arc');
+
+				// Refresh UI with new values
+				refreshPromptFields();
+				refreshSettingsUI();
+
+				// Update preset selections in dropdowns
+				$('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
+				$('#rmr_query_preset').val(settings.current_query_preset || '');
+				$('#rmr_timeline_fill_preset').val(settings.current_timeline_fill_preset || '');
+				$('#rmr_arc_preset').val(settings.current_arc_preset || '');
+
+				// Update button states
+				updatePresetButtons('summarize', settings.current_summarize_preset);
+				updatePresetButtons('query', settings.current_query_preset);
+				updatePresetButtons('timeline_fill', settings.current_timeline_fill_preset);
+				updatePresetButtons('arc', settings.current_arc_preset);
+
+				toastr.success('Configuration imported successfully.');
+			} catch (error) {
+				console.error('Master import error:', error);
+				toastr.error(error.message);
+			}
+		};
+
+		reader.onerror = function() {
+			toastr.error('Failed to read file.');
+		};
+
+		reader.readAsText(file);
+	};
+
+	input.click();
+}
+
+// Refresh all settings UI elements
+function refreshSettingsUI() {
+	// Checkboxes
+	$('#rmr_tools_enabled').prop('checked', settings.tools_enabled);
+	$('#rmr_hide_chapter').prop('checked', settings.hide_chapter);
+	$('#rmr_add_chunk_summaries').prop('checked', settings.add_chunk_summaries);
+
+	// Button checkboxes
+	for (const button in Buttons) {
+		const button_name = Buttons[button];
+		$(`#rmr_${button_name}`).prop('checked', settings.show_buttons.includes(button_name));
+	}
+
+	// Numeric inputs
+	$('#rmr_rate_limit').val(settings.rate_limit);
 }
