@@ -1153,8 +1153,30 @@ function validatePreset(preset) {
 	return true;
 }
 
-// Master export - export all settings and presets
+// Master export - export all settings and currently selected presets
 export function exportAllSettings() {
+	// Helper to get current preset if selected
+	const getSelectedPreset = (presetType) => {
+		let currentId = null;
+		if (presetType === 'summarize') currentId = settings.current_summarize_preset;
+		else if (presetType === 'query') currentId = settings.current_query_preset;
+		else if (presetType === 'timeline_fill') currentId = settings.current_timeline_fill_preset;
+		else if (presetType === 'arc') currentId = settings.current_arc_preset;
+
+		if (!currentId) return null;
+
+		const preset = findPresetById(presetType, currentId);
+		if (!preset) return null;
+
+		return {
+			id: preset.id,
+			name: preset.name,
+			systemPrompt: preset.systemPrompt,
+			userPrompt: preset.userPrompt,
+			rateLimit: preset.rateLimit
+		};
+	};
+
 	const exportData = {
 		version: '1.0',
 		extension: 'timeline-memory',
@@ -1186,34 +1208,10 @@ export function exportAllSettings() {
 			current_arc_preset: settings.current_arc_preset
 		},
 		presets: {
-			summarize: settings.summarize_presets.map(p => ({
-				id: p.id,
-				name: p.name,
-				systemPrompt: p.systemPrompt,
-				userPrompt: p.userPrompt,
-				rateLimit: p.rateLimit
-			})),
-			query: settings.query_presets.map(p => ({
-				id: p.id,
-				name: p.name,
-				systemPrompt: p.systemPrompt,
-				userPrompt: p.userPrompt,
-				rateLimit: p.rateLimit
-			})),
-			timeline_fill: settings.timeline_fill_presets.map(p => ({
-				id: p.id,
-				name: p.name,
-				systemPrompt: p.systemPrompt,
-				userPrompt: p.userPrompt,
-				rateLimit: p.rateLimit
-			})),
-			arc: settings.arc_presets.map(p => ({
-				id: p.id,
-				name: p.name,
-				systemPrompt: p.systemPrompt,
-				userPrompt: p.userPrompt,
-				rateLimit: p.rateLimit
-			}))
+			summarize: getSelectedPreset('summarize') ? [getSelectedPreset('summarize')] : [],
+			query: getSelectedPreset('query') ? [getSelectedPreset('query')] : [],
+			timeline_fill: getSelectedPreset('timeline_fill') ? [getSelectedPreset('timeline_fill')] : [],
+			arc: getSelectedPreset('arc') ? [getSelectedPreset('arc')] : []
 		}
 	};
 
