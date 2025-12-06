@@ -6,7 +6,7 @@
  */
 
 import { extension_settings, getContext } from "../../../../extensions.js";
-import { saveChatConditional, reloadCurrentChat, characters, this_chid, eventSource, event_types } from "../../../../../script.js";
+import { saveChatConditional, reloadCurrentChat, characters, this_chid, eventSource, event_types, stopGeneration } from "../../../../../script.js";
 import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { world_names, loadWorldInfo, createWorldInfoEntry, deleteWorldInfoEntry, saveWorldInfo } from "../../../../world-info.js";
 import { settings } from "./settings.js";
@@ -394,6 +394,10 @@ async function editLorebookEntry(args) {
 function endLoreManagementTool() {
     loreManagementState.endRequested = true;
     log('End lore management requested via tool');
+
+    // Stop any further generation immediately
+    stopGeneration();
+
     return 'Lore management session ending. All lorebook changes have been saved.';
 }
 
