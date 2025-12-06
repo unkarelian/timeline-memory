@@ -43,10 +43,14 @@ jQuery(async () => {
 		eventSource.on(event_types.CHAT_CHANGED, async (chatId)=>{
 			if (!chatId) return;
 			// Abort any active lore management session when chat changes
+			// Also check for and recover from interrupted sessions (e.g., page refresh)
 			try {
-				const { abortLoreManagementSession, isLoreManagementActive } = await import('./src/lore-management.js');
+				const { abortLoreManagementSession, isLoreManagementActive, recoverInterruptedSession } = await import('./src/lore-management.js');
 				if (isLoreManagementActive()) {
 					await abortLoreManagementSession();
+				} else {
+					// Check for interrupted session that needs recovery
+					await recoverInterruptedSession();
 				}
 			} catch (err) {
 				// Module might not be loaded yet, ignore

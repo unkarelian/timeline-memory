@@ -100,7 +100,6 @@ Analyze the chat and propose arcs according to the rules. Use the id field from 
     // Lore management settings
     "lore_management_enabled": false,
     "lore_management_profile": null,
-    "lore_management_auto_trigger": true,
     "lore_management_prompt": "begin lore retrieval",
 }
 
@@ -398,7 +397,6 @@ async function loadSettingsUI() {
 
     // Lore management settings
     $('#rmr_lore_management_enabled').prop('checked', settings.lore_management_enabled).on('click', toggleCheckboxSetting);
-    $('#rmr_lore_management_auto_trigger').prop('checked', settings.lore_management_auto_trigger).on('click', toggleCheckboxSetting);
     $('#rmr_lore_management_prompt').val(settings.lore_management_prompt).on('change', handleStringValueChange);
 
     // Lore management profile dropdown
@@ -713,7 +711,6 @@ function refreshPromptFields() {
     $('#rmr_rate_limit').val(settings.rate_limit);
     // Lore management fields
     $('#rmr_lore_management_enabled').prop('checked', settings.lore_management_enabled);
-    $('#rmr_lore_management_auto_trigger').prop('checked', settings.lore_management_auto_trigger);
     $('#rmr_lore_management_prompt').val(settings.lore_management_prompt);
     $('#rmr_lore_management_profile').val(settings.lore_management_profile || '');
 }

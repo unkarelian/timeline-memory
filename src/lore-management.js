@@ -6,11 +6,79 @@
  */
 
 import { extension_settings, getContext } from "../../../../extensions.js";
-import { saveChatConditional, reloadCurrentChat, characters, this_chid } from "../../../../../script.js";
+import { saveChatConditional, reloadCurrentChat, characters, this_chid, eventSource, event_types } from "../../../../../script.js";
 import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { world_names, loadWorldInfo, createWorldInfoEntry, deleteWorldInfoEntry, saveWorldInfo } from "../../../../world-info.js";
 import { settings } from "./settings.js";
 import { log, debug, error } from "./logging.js";
+
+/**
+ * Switch to a profile using SlashCommandParser directly
+ * @param {string} profileName - The profile name to switch to, or 'none' for no profile
+ * @returns {Promise<void>}
+ */
+async function switchProfile(profileName) {
+    const context = getContext();
+    const SlashCommandParser = context.SlashCommandParser;
+
+    if (!SlashCommandParser?.commands?.['profile']) {
+        error('Profile slash command not available');
+        return;
+    }
+
+    // Set up promise to wait for profile switch to complete
+    const switchCompletePromise = new Promise((resolve) => {
+        let resolved = false;
+
+        const modelChangedHandler = () => {
+            if (!resolved) {
+                log('Profile switch complete (model changed)');
+                resolved = true;
+                eventSource.removeListener(event_types.CHATCOMPLETION_MODEL_CHANGED, modelChangedHandler);
+                eventSource.removeListener(event_types.ONLINE_STATUS_CHANGED, statusChangedHandler);
+                resolve();
+            }
+        };
+
+        const statusChangedHandler = () => {
+            if (!resolved) {
+                log('Profile switch complete (status changed)');
+                resolved = true;
+                eventSource.removeListener(event_types.CHATCOMPLETION_MODEL_CHANGED, modelChangedHandler);
+                eventSource.removeListener(event_types.ONLINE_STATUS_CHANGED, statusChangedHandler);
+                resolve();
+            }
+        };
+
+        eventSource.once(event_types.CHATCOMPLETION_MODEL_CHANGED, modelChangedHandler);
+        eventSource.once(event_types.ONLINE_STATUS_CHANGED, statusChangedHandler);
+
+        // Timeout in case neither event fires
+        setTimeout(() => {
+            if (!resolved) {
+                log('Profile switch timeout - continuing anyway');
+                resolved = true;
+                eventSource.removeListener(event_types.CHATCOMPLETION_MODEL_CHANGED, modelChangedHandler);
+                eventSource.removeListener(event_types.ONLINE_STATUS_CHANGED, statusChangedHandler);
+                resolve();
+            }
+        }, 3000);
+    });
+
+    const args = {
+        _scope: null,
+        _abortController: null,
+        _debugController: null,
+        _parserFlags: {},
+        _hasUnnamedArgument: false,
+        quiet: 'true'
+    };
+
+    log(`Switching to profile: ${profileName}`);
+    await SlashCommandParser.commands['profile'].callback(args, profileName);
+    await switchCompletePromise;
+    log('Profile switch complete');
+}
 
 // Session state
 const loreManagementState = {
@@ -22,6 +90,95 @@ const loreManagementState = {
     hiddenMessageStart: -1,  // First message index that was hidden
     hiddenMessageEnd: -1,    // Last message index that was hidden
 };
+
+const LORE_MANAGEMENT_METADATA_KEY = 'lore_management_session';
+
+/**
+ * Save lore management state to chat metadata for recovery after refresh
+ */
+function saveStateToMetadata() {
+    const context = getContext();
+    if (!context.chatMetadata) return;
+
+    context.chatMetadata[LORE_MANAGEMENT_METADATA_KEY] = {
+        active: loreManagementState.active,
+        savedProfileId: loreManagementState.savedProfileId,
+        savedProfileName: loreManagementState.savedProfileName,
+        startMessageIndex: loreManagementState.startMessageIndex,
+        hiddenMessageStart: loreManagementState.hiddenMessageStart,
+        hiddenMessageEnd: loreManagementState.hiddenMessageEnd,
+    };
+    log('Saved lore management state to metadata');
+}
+
+/**
+ * Clear lore management state from chat metadata
+ */
+function clearStateFromMetadata() {
+    const context = getContext();
+    if (!context.chatMetadata) return;
+
+    delete context.chatMetadata[LORE_MANAGEMENT_METADATA_KEY];
+    log('Cleared lore management state from metadata');
+}
+
+/**
+ * Check for and recover from an interrupted lore management session
+ * Call this on CHAT_CHANGED to handle page refresh recovery
+ * @returns {Promise<boolean>} True if recovery was performed
+ */
+export async function recoverInterruptedSession() {
+    const context = getContext();
+    if (!context.chatMetadata) return false;
+
+    const savedState = context.chatMetadata[LORE_MANAGEMENT_METADATA_KEY];
+    if (!savedState || !savedState.active) return false;
+
+    log('Recovering from interrupted lore management session');
+    toastr.warning('Recovering from interrupted lore management session...', 'Timeline Memory');
+
+    const chat = context.chat;
+
+    try {
+        // Delete agentic messages (from startMessageIndex to end)
+        const messagesToDelete = chat.length - savedState.startMessageIndex;
+        if (messagesToDelete > 0) {
+            log(`Deleting ${messagesToDelete} agentic messages`);
+            chat.splice(savedState.startMessageIndex, messagesToDelete);
+        }
+
+        // Unhide the messages that were hidden
+        if (savedState.hiddenMessageStart >= 0 && savedState.hiddenMessageEnd >= 0) {
+            log(`Unhiding messages ${savedState.hiddenMessageStart} to ${savedState.hiddenMessageEnd}`);
+            await executeSlashCommandsWithOptions(`/unhide ${savedState.hiddenMessageStart}-${savedState.hiddenMessageEnd}`);
+        }
+
+        // Clear the saved state
+        clearStateFromMetadata();
+
+        // Save and reload chat first
+        await saveChatConditional();
+        await reloadCurrentChat();
+
+        // Restore original profile after chat reload
+        if (savedState.savedProfileName) {
+            await switchProfile(savedState.savedProfileName);
+        } else {
+            await switchProfile('none');
+        }
+
+        log('Recovery completed successfully');
+        toastr.success('Lore management session recovered', 'Timeline Memory');
+        return true;
+
+    } catch (err) {
+        error('Error during recovery:', err);
+        toastr.error('Error recovering lore management session', 'Timeline Memory');
+        // Clear the state anyway to prevent repeated recovery attempts
+        clearStateFromMetadata();
+        return false;
+    }
+}
 
 /**
  * Check if a lore management session is currently active
@@ -440,12 +597,15 @@ export async function startLoreManagementSession() {
             await executeSlashCommandsWithOptions(`/hide ${firstVisibleIndex}-${loreManagementState.hiddenMessageEnd}`);
         }
 
+        // Save state to metadata for recovery after page refresh
+        saveStateToMetadata();
+        await saveChatConditional();
+
         // Register lore tools
         registerLoreTools();
 
         // Swap to lore management profile
-        log(`Swapping to lore management profile: ${loreProfileName}`);
-        await executeSlashCommandsWithOptions(`/profile "${loreProfileName}" await=true`);
+        await switchProfile(loreProfileName);
 
         // Wait for profile swap to fully settle
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -538,19 +698,22 @@ async function cleanupLoreManagementSession() {
             await executeSlashCommandsWithOptions(`/unhide ${loreManagementState.hiddenMessageStart}-${loreManagementState.hiddenMessageEnd}`);
         }
 
-        // Restore original profile if one was saved
-        if (loreManagementState.savedProfileName) {
-            log(`Restoring profile: ${loreManagementState.savedProfileName}`);
-            await executeSlashCommandsWithOptions(`/profile "${loreManagementState.savedProfileName}" await=true`);
-        } else if (loreManagementState.savedProfileId === null) {
-            // No profile was selected before, select none
-            log('Restoring to no profile');
-            await executeSlashCommandsWithOptions('/profile "<None>" await=true');
-        }
+        // Clear state from metadata BEFORE saving so it persists
+        clearStateFromMetadata();
 
         // Save and reload chat
         await saveChatConditional();
         await reloadCurrentChat();
+
+        // Restore original profile after chat reload
+        // This ensures the profile swap persists and doesn't get overwritten
+        const profileToRestore = loreManagementState.savedProfileName;
+        if (profileToRestore) {
+            await switchProfile(profileToRestore);
+        } else {
+            // No profile was selected before, select none
+            await switchProfile('none');
+        }
 
         log('Lore management session cleaned up successfully');
         toastr.success('Lore management session completed', 'Timeline Memory');
@@ -559,6 +722,9 @@ async function cleanupLoreManagementSession() {
         error('Error during cleanup:', err);
         toastr.error('Error cleaning up lore management session', 'Timeline Memory');
     } finally {
+        // Clear state from metadata (safety net in case of errors)
+        clearStateFromMetadata();
+
         // Reset state
         loreManagementState.active = false;
         loreManagementState.savedProfileId = null;

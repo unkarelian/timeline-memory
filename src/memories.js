@@ -1643,16 +1643,6 @@ export async function summarizeChapter(message, options={}) {
 	toggleChapterHighlight($(`.mes[mesid="${mes_id}"] .rmr-button.fa-circle-stop`), mes_id);
 
 	doneToast(`Chapter ${timelineData.length} added to timeline.`);
-
-	// Trigger lore management if enabled and auto-trigger is on
-	if (settings.lore_management_enabled && settings.lore_management_auto_trigger) {
-		try {
-			const { startLoreManagementSession } = await import('./lore-management.js');
-			await startLoreManagementSession();
-		} catch (err) {
-			console.error('Failed to start lore management after chapter end:', err);
-		}
-	}
 }
 
 // Alias for backward compatibility
