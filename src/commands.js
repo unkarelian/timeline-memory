@@ -297,6 +297,23 @@ export function loadSlashCommands() {
 		helpString: 'Analyze the chat history to propose arc endpoints and show them in a popup.',
 	}));
 
+	// Register lore management command
+	parser.addCommandObject(command.fromProps({
+		name: 'lore-manage',
+		callback: async () => {
+			try {
+				const { startLoreManagementSession } = await import('./lore-management.js');
+				await startLoreManagementSession();
+				return '';
+			} catch (err) {
+				console.error('Lore Management command failed:', err);
+				toastr.error('Failed to start lore management: ' + err.message, 'Timeline Memory');
+				return '';
+			}
+		},
+		helpString: 'Start a lore management session to autonomously edit lorebooks using AI tools.',
+	}));
+
 	parser.addCommandObject(command.fromProps({
 		name: 'chapter-end',
 		callback: (args, value) => {

@@ -24,6 +24,39 @@
 				</div>
 			</div>
 			<hr>
+			<h4>Lore Management</h4>
+			<div class="rmr-extension_block">
+				<label class="checkbox_label" for="rmr_lore_management_enabled">
+					<input id="rmr_lore_management_enabled" class="checkbox" type="checkbox" />
+					Enable Lore Management Mode
+				</label>
+				<label class="checkbox_label" for="rmr_lore_management_auto_trigger">
+					<input id="rmr_lore_management_auto_trigger" class="checkbox" type="checkbox" />
+					Auto-trigger after chapter summarization
+				</label>
+			</div>
+			<div class="rmr-extension_block">
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_lore_management_profile">
+							<small>Lore Management Profile</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_lore_management_profile">
+							<option value="">-- Select Profile --</option>
+						</select>
+					</div>
+					<div class="flex-container flex0 flexFlowColumn" style="align-items:flex-end;justify-content:flex-end;gap:6px;">
+						<button type="button" class="menu_button" id="rmr_run_lore_manage">Run Lore Management</button>
+					</div>
+				</div>
+				<div class="flex-container flex1 flexFlowColumn">
+					<label for="rmr_lore_management_prompt">
+						<small>Lore Management Prompt</small>
+					</label>
+					<textarea placeholder="begin lore retrieval" rows="2" class="margin0 text_pole textarea_compact" id="rmr_lore_management_prompt"></textarea>
+				</div>
+			</div>
+			<hr>
 			<h4>Arc Analyzer</h4>
 			<div class="rmr-extension_block">
 				<div class="flex-container marginTopBot5">

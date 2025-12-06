@@ -96,6 +96,12 @@ Analyze the chat and propose arcs according to the rules. Use the id field from 
     "arc_profile": null,
     "arc_presets": [],
     "current_arc_preset": null,
+
+    // Lore management settings
+    "lore_management_enabled": false,
+    "lore_management_profile": null,
+    "lore_management_auto_trigger": true,
+    "lore_management_prompt": "begin lore retrieval",
 }
 
 function toggleCheckboxSetting(event) {
@@ -156,12 +162,19 @@ function reloadProfiles() {
     if (arcProfileSelect?.length) {
         arcProfileSelect.not(':first').remove();
     }
+    const loreManagementSelect = $('#rmr_lore_management_profile');
+    if (loreManagementSelect?.length) {
+        loreManagementSelect.not(':first').remove();
+    }
     if (!extension_settings.connectionManager?.profiles) {
         if (timelineFillSelect?.length) {
             timelineFillSelect.val('');
         }
         if (arcProfileSelect?.length) {
             arcProfileSelect.val('');
+        }
+        if (loreManagementSelect?.length) {
+            loreManagementSelect.val('');
         }
         return;
     }
@@ -190,6 +203,16 @@ function reloadProfiles() {
             );
             if (settings.arc_profile == profile.id) {
                 arcProfileSelect.val(profile.id);
+            }
+        }
+        if (loreManagementSelect?.length) {
+            loreManagementSelect.append(
+                $('<option></option>')
+                    .attr('value', profile.id)
+                    .text(profile.name)
+            );
+            if (settings.lore_management_profile == profile.id) {
+                loreManagementSelect.val(profile.id);
             }
         }
     }
@@ -372,7 +395,44 @@ async function loadSettingsUI() {
             getContext().saveSettingsDebounced();
         }
     });
-	
+
+    // Lore management settings
+    $('#rmr_lore_management_enabled').prop('checked', settings.lore_management_enabled).on('click', toggleCheckboxSetting);
+    $('#rmr_lore_management_auto_trigger').prop('checked', settings.lore_management_auto_trigger).on('click', toggleCheckboxSetting);
+    $('#rmr_lore_management_prompt').val(settings.lore_management_prompt).on('change', handleStringValueChange);
+
+    // Lore management profile dropdown
+    const loreManagementProfileSelect = $('#rmr_lore_management_profile');
+    loreManagementProfileSelect.on('input', () => {
+        const profile = loreManagementProfileSelect.val();
+        if (!profile.length) {
+            settings.lore_management_profile = null;
+            getContext().saveSettingsDebounced();
+            return;
+        }
+        const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
+        if (profileID >= 0) {
+            settings.lore_management_profile = profile;
+            getContext().saveSettingsDebounced();
+        } else {
+            toastr.error("Non-existent profile selected.", "Timeline Memory");
+            loreManagementProfileSelect.val('');
+            settings.lore_management_profile = null;
+            getContext().saveSettingsDebounced();
+        }
+    });
+
+    // Wire the lore management button
+    $('#rmr_run_lore_manage').on('click', async () => {
+        try {
+            const { startLoreManagementSession } = await import('./lore-management.js');
+            await startLoreManagementSession();
+        } catch (err) {
+            console.error('Lore Management error:', err);
+            toastr.error('Failed to start Lore Management', 'Timeline Memory');
+        }
+    });
+
 	// load all numeric settings
 	$(`.rmr-extension_block input[type="number"]`).each((_i, elem) => {
 		const setting_key = elem.id.replace('rmr_', '');
@@ -651,6 +711,11 @@ function refreshPromptFields() {
     $('#rmr_arc_analyzer_prompt_template').val(settings.arc_analyzer_prompt_template);
     $('#rmr_arc_profile').val(settings.arc_profile || '');
     $('#rmr_rate_limit').val(settings.rate_limit);
+    // Lore management fields
+    $('#rmr_lore_management_enabled').prop('checked', settings.lore_management_enabled);
+    $('#rmr_lore_management_auto_trigger').prop('checked', settings.lore_management_auto_trigger);
+    $('#rmr_lore_management_prompt').val(settings.lore_management_prompt);
+    $('#rmr_lore_management_profile').val(settings.lore_management_profile || '');
 }
 
 function handleSavePreset(presetType) {
