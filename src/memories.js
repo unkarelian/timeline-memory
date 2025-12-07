@@ -1792,59 +1792,183 @@ function _sanitize(text) {
     return String(text ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 }
 
+/**
+ * Find the first visible (non-system/non-hidden) message index
+ * @returns {number} The index of the first visible message, or 0 if none found
+ */
+function findFirstVisibleMessageIndex() {
+    const context = getContext();
+    const chat = context.chat || [];
+    for (let i = 0; i < chat.length; i++) {
+        if (!chat[i].is_system) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Get the most recent message ID
+ * @returns {number} The index of the last message, or 0 if chat is empty
+ */
+function getMostRecentMessageId() {
+    const context = getContext();
+    const chat = context.chat || [];
+    return Math.max(0, chat.length - 1);
+}
+
+/**
+ * Show the arc analyzer popup with persistent display
+ * @param {Array} arcs - Array of arc objects from the analyzer
+ */
 async function showArcPopup(arcs) {
-    const Popup = getContext().Popup;
+    const context = getContext();
+    const Popup = context.Popup;
+
     if (!Array.isArray(arcs) || arcs.length === 0) {
         await Popup.show.text('Arc Analyzer', 'No valid arcs found.');
         return;
     }
 
-    const listHtml = arcs
-        .map(a => `<div class="arc-item"><b>${_sanitize(a.title)}</b> <small>(end @ ${a.chapterEnd})</small><br>${_sanitize(a.summary)}<br><i>${_sanitize(a.justification || '')}</i></div>`)
-        .join('<hr class="sysHR">');
+    // Get current position info
+    const firstVisibleId = findFirstVisibleMessageIndex();
+    const mostRecentId = getMostRecentMessageId();
 
-    /** @type {import('../../../../public/scripts/popup.js').CustomPopupButton[]} */
-    const customButtons = [];
-    // Try to resolve the summarization profile name so we can pass it to /chapter-end
-    let summarizerProfileName = '';
-    try {
-        const profiles = extension_settings?.connectionManager?.profiles || [];
-        const prof = profiles.find(p => p.id === settings.profile);
-        summarizerProfileName = prof?.name || '';
-    } catch (_) { /* ignore */ }
+    // Create custom popup HTML
+    const overlayEl = document.createElement('div');
+    overlayEl.className = 'rmr-arc-popup-overlay';
+    overlayEl.innerHTML = `
+        <div class="rmr-arc-popup">
+            <div class="rmr-arc-popup-header">
+                <span class="rmr-arc-popup-title">Arc Analyzer</span>
+                <span class="rmr-arc-popup-position">
+                    First visible: <strong id="rmr-arc-first-visible">${firstVisibleId}</strong> |
+                    Most recent: <strong id="rmr-arc-most-recent">${mostRecentId}</strong>
+                </span>
+                <button class="rmr-arc-popup-close" title="Close">×</button>
+            </div>
+            <div class="rmr-arc-popup-body">
+                <div class="rmr-arc-list" id="rmr-arc-list"></div>
+            </div>
+            <div class="rmr-arc-popup-loading" id="rmr-arc-loading">
+                <i class="fa-solid fa-gear fa-spin"></i>
+                <span>Summarizing chapter...</span>
+            </div>
+        </div>
+    `;
 
-    const quoteArg = (s) => String(s).replace(/"/g, '\\"');
-    for (const a of arcs) {
-        customButtons.push({
-            text: `End @ ${a.chapterEnd}: ${a.title}`,
-            classes: ['menu_button'],
-            result: 1,
-            action: async () => {
-                try {
-                    // Validate the target message exists in the DOM
-                    const mesId = Number(a.chapterEnd);
-                    const mesEl = $(`.mes[mesid="${mesId}"]`);
-                    if (!mesEl || mesEl.length === 0) {
-                        toastr.error(`Message ${mesId} not found. The chat may have changed.`, 'Arc Analyzer');
+    // Build arc items
+    const arcListEl = overlayEl.querySelector('#rmr-arc-list');
+
+    for (const arc of arcs) {
+        const messageCount = arc.chapterEnd - firstVisibleId + 1;
+        const arcItem = document.createElement('div');
+        arcItem.className = 'rmr-arc-item';
+        arcItem.dataset.arcEnd = arc.chapterEnd;
+        arcItem.innerHTML = `
+            <div class="rmr-arc-item-header">
+                <span class="rmr-arc-item-title">${_sanitize(arc.title)}</span>
+                <span class="rmr-arc-item-meta">
+                    End @ <strong>${arc.chapterEnd}</strong>
+                    (<span class="rmr-arc-item-count">${messageCount}</span> messages)
+                </span>
+            </div>
+            <div class="rmr-arc-item-summary">${_sanitize(arc.summary)}</div>
+            ${arc.justification ? `<div class="rmr-arc-item-justification"><i>${_sanitize(arc.justification)}</i></div>` : ''}
+            <button class="menu_button rmr-arc-item-btn">Create Chapter Here</button>
+        `;
+
+        // Button click handler
+        const btn = arcItem.querySelector('.rmr-arc-item-btn');
+        btn.addEventListener('click', async () => {
+            const loadingEl = overlayEl.querySelector('#rmr-arc-loading');
+            const popupEl = overlayEl.querySelector('.rmr-arc-popup');
+
+            try {
+                // Validate the target message exists
+                const mesId = Number(arc.chapterEnd);
+                const mesEl = $(`.mes[mesid="${mesId}"]`);
+                if (!mesEl || mesEl.length === 0) {
+                    toastr.error(`Message ${mesId} not found. The chat may have changed.`, 'Arc Analyzer');
+                    return;
+                }
+
+                // Show loading state
+                loadingEl.classList.add('active');
+                popupEl.classList.add('loading');
+
+                // Call summarizeChapter directly with the profile override
+                // This properly awaits the entire summarization process
+                const options = {};
+                if (settings.profile) {
+                    options.profile = settings.profile;
+                }
+                await summarizeChapter(mesEl, options);
+
+                // Update position info after successful summary
+                const newFirstVisible = findFirstVisibleMessageIndex();
+                const newMostRecent = getMostRecentMessageId();
+                overlayEl.querySelector('#rmr-arc-first-visible').textContent = newFirstVisible;
+                overlayEl.querySelector('#rmr-arc-most-recent').textContent = newMostRecent;
+
+                // Update message counts and remove arcs that are now before the first visible message
+                overlayEl.querySelectorAll('.rmr-arc-item').forEach(item => {
+                    const arcEnd = parseInt(item.dataset.arcEnd, 10);
+                    const newCount = arcEnd - newFirstVisible + 1;
+
+                    // Remove arcs that are now before the first visible message
+                    if (newCount <= 0) {
+                        item.remove();
                         return;
                     }
 
-                    // If we have a summarization profile selected, use it for the summary instead of analyzer profile
-                    const profileArg = summarizerProfileName ? ` profile="${quoteArg(summarizerProfileName)}"` : '';
-                    // Place named args before the unnamed one, otherwise parser may include them in the value
-                    await runSlashCommand(`/chapter-end${profileArg} ${mesId}`);
-                    toastr.success(`Chapter ended at ${a.chapterEnd}`, 'Arc Analyzer');
-                } catch (err) {
-                    console.error('Arc apply error:', err);
-                    toastr.error('Failed to apply chapter end', 'Arc Analyzer');
-                }
-            },
-        });
-    }
-    customButtons.push({ text: 'Close', result: 1, classes: ['menu_button', 'menu_button_secondary'], appendAtEnd: true });
+                    const countEl = item.querySelector('.rmr-arc-item-count');
+                    if (countEl) {
+                        countEl.textContent = newCount;
+                    }
+                });
 
-    const safeHtml = `<div class="arc-list">${listHtml}</div>`;
-    await Popup.show.text('Arc Analyzer', safeHtml, { leftAlign: true, wide: true, allowVerticalScrolling: true, customButtons });
+                // Mark this arc as completed
+                arcItem.classList.add('completed');
+                btn.textContent = '✓ Completed';
+                btn.disabled = true;
+
+            } catch (err) {
+                console.error('Arc apply error:', err);
+                toastr.error('Failed to apply chapter end', 'Arc Analyzer');
+            } finally {
+                // Hide loading state
+                loadingEl.classList.remove('active');
+                popupEl.classList.remove('loading');
+            }
+        });
+
+        arcListEl.appendChild(arcItem);
+    }
+
+    // Close button handler
+    overlayEl.querySelector('.rmr-arc-popup-close').addEventListener('click', () => {
+        overlayEl.remove();
+    });
+
+    // Click outside to close
+    overlayEl.addEventListener('click', (e) => {
+        if (e.target === overlayEl) {
+            overlayEl.remove();
+        }
+    });
+
+    // ESC key to close
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            overlayEl.remove();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // Add to DOM
+    document.body.appendChild(overlayEl);
 }
 
 export async function analyzeArcs(profileOverride = null) {
