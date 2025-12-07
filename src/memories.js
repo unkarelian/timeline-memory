@@ -526,6 +526,20 @@ function saveTimelineData() {
 	}
 	context.chatMetadata.timeline = timelineData;
 	context.saveMetadata();
+
+	// Refresh the summaries list in the settings panel
+	refreshSummariesList();
+}
+
+// Helper function to refresh the summaries list UI
+async function refreshSummariesList() {
+	try {
+		const { renderSummariesList } = await import('./settings.js');
+		renderSummariesList();
+	} catch (err) {
+		// Settings module might not be fully loaded yet, ignore
+		debug('Could not refresh summaries list:', err.message);
+	}
 }
 
 // Add a chapter to the timeline
@@ -670,6 +684,17 @@ export function getChapterSummary(chapterNumber) {
 		return null;
 	}
 	return timelineData[chapterNumber - 1].summary;
+}
+
+// Update a specific chapter's summary
+export function updateChapterSummary(chapterNumber, newSummary) {
+	if (chapterNumber < 1 || chapterNumber > timelineData.length) {
+		return false;
+	}
+	timelineData[chapterNumber - 1].summary = newSummary;
+	saveTimelineData();
+	debug('Updated chapter summary:', chapterNumber, newSummary);
+	return true;
 }
 
 // Get a specific chapter's full chat history

@@ -115,6 +115,32 @@
 				</label>
 			</div>
 			<hr>
+			<h4><i class="fa-solid fa-book"></i> Summaries</h4>
+			<div class="rmr-extension_block">
+				<div id="rmr_summaries_container" class="rmr-summaries-container">
+					<div class="rmr-summaries-empty">No chapters in current chat. End a chapter to create a summary.</div>
+				</div>
+			</div>
+			<!-- Fullscreen Summary Popup -->
+			<div id="rmr_summary_popup" class="rmr-summary-popup-overlay" style="display: none;">
+				<div class="rmr-summary-popup">
+					<div class="rmr-summary-popup-header">
+						<span class="rmr-summary-popup-title">Chapter <span id="rmr_popup_chapter_num"></span></span>
+						<span class="rmr-summary-popup-range" id="rmr_popup_range"></span>
+						<button type="button" class="rmr-summary-popup-close" id="rmr_popup_close">
+							<i class="fa-solid fa-xmark"></i>
+						</button>
+					</div>
+					<div class="rmr-summary-popup-body">
+						<textarea id="rmr_popup_textarea" class="rmr-summary-popup-textarea text_pole" placeholder="Enter chapter summary..."></textarea>
+					</div>
+					<div class="rmr-summary-popup-footer">
+						<button type="button" class="menu_button" id="rmr_popup_cancel">Cancel</button>
+						<button type="button" class="menu_button" id="rmr_popup_save" disabled>Save</button>
+					</div>
+				</div>
+			</div>
+			<hr>
 			<h4>API Connection Profiles</h4>
 			<div class="rmr-extension_block">
 				<div class="flex-container marginTopBot5">
@@ -322,5 +348,171 @@
 	display: flex;
 	align-items: center;
 	gap: 5px;
+}
+
+/* Summaries list styles */
+.rmr-summaries-container {
+	max-height: 400px;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.rmr-summaries-empty {
+	color: var(--SmartThemeQuoteColor);
+	font-style: italic;
+	padding: 10px;
+	text-align: center;
+}
+
+.rmr-summary-item {
+	border: 1px solid var(--SmartThemeBorderColor);
+	border-radius: 4px;
+	padding: 8px;
+	background: var(--SmartThemeBlurTintColor);
+}
+
+.rmr-summary-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 6px;
+	font-weight: 500;
+	color: var(--SmartThemeEmColor);
+}
+
+.rmr-summary-range {
+	font-size: 11px;
+	color: var(--SmartThemeQuoteColor);
+	font-weight: normal;
+}
+
+.rmr-summary-text {
+	width: 100%;
+	min-height: 60px;
+	resize: vertical;
+	font-size: 12px;
+}
+
+.rmr-summary-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 5px;
+	margin-top: 6px;
+}
+
+.rmr-summary-actions .menu_button {
+	font-size: 11px;
+	padding: 3px 8px;
+}
+
+.rmr-summary-actions .menu_button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.rmr-summary-expand {
+	background: none;
+	border: none;
+	color: var(--SmartThemeBodyColor);
+	cursor: pointer;
+	padding: 2px 6px;
+	opacity: 0.7;
+	transition: opacity 0.2s;
+}
+
+.rmr-summary-expand:hover {
+	opacity: 1;
+}
+
+/* Fullscreen popup styles */
+.rmr-summary-popup-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.7);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 9999;
+}
+
+.rmr-summary-popup {
+	background: var(--SmartThemeBlurTintColor);
+	border: 1px solid var(--SmartThemeBorderColor);
+	border-radius: 8px;
+	width: 80%;
+	max-width: 800px;
+	max-height: 80vh;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.rmr-summary-popup-header {
+	display: flex;
+	align-items: center;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--SmartThemeBorderColor);
+	gap: 12px;
+}
+
+.rmr-summary-popup-title {
+	font-weight: 600;
+	font-size: 16px;
+	color: var(--SmartThemeEmColor);
+}
+
+.rmr-summary-popup-range {
+	font-size: 12px;
+	color: var(--SmartThemeQuoteColor);
+	flex: 1;
+}
+
+.rmr-summary-popup-close {
+	background: none;
+	border: none;
+	color: var(--SmartThemeBodyColor);
+	cursor: pointer;
+	padding: 4px 8px;
+	font-size: 18px;
+	opacity: 0.7;
+	transition: opacity 0.2s;
+}
+
+.rmr-summary-popup-close:hover {
+	opacity: 1;
+}
+
+.rmr-summary-popup-body {
+	flex: 1;
+	padding: 16px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.rmr-summary-popup-textarea {
+	flex: 1;
+	width: 100%;
+	min-height: 300px;
+	resize: vertical;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.rmr-summary-popup-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 12px 16px;
+	border-top: 1px solid var(--SmartThemeBorderColor);
+}
+
+.rmr-summary-popup-footer .menu_button {
+	padding: 6px 16px;
 }
 </style>

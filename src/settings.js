@@ -458,6 +458,9 @@ async function loadSettingsUI() {
         }
     });
 
+    // Render summaries list after a short delay to ensure timeline data is loaded
+    setTimeout(() => renderSummariesList(), 100);
+
 	debug('Settings UI loaded');
 }
 
@@ -1537,4 +1540,169 @@ function refreshSettingsUI() {
 
 	// Numeric inputs
 	$('#rmr_rate_limit').val(settings.rate_limit);
+}
+
+// Render the summaries list in the settings panel
+export async function renderSummariesList() {
+	const container = $('#rmr_summaries_container');
+	if (!container.length) return;
+
+	// Dynamically import to avoid circular dependencies
+	const { getTimelineEntries, updateChapterSummary } = await import('./memories.js');
+	const timeline = getTimelineEntries();
+
+	container.empty();
+
+	if (!timeline || timeline.length === 0) {
+		container.append('<div class="rmr-summaries-empty">No chapters in current chat. End a chapter to create a summary.</div>');
+		return;
+	}
+
+	timeline.forEach((chapter, index) => {
+		const chapterNum = index + 1;
+		const startMsg = chapter.startMsgId === 0 ? 0 : chapter.startMsgId + 1;
+		const endMsg = chapter.endMsgId;
+
+		const summaryItem = $(`
+			<div class="rmr-summary-item" data-chapter="${chapterNum}">
+				<div class="rmr-summary-header">
+					<span>Chapter ${chapterNum}</span>
+					<span class="rmr-summary-range">Messages ${startMsg} - ${endMsg}</span>
+					<button type="button" class="rmr-summary-expand" data-chapter="${chapterNum}" data-start="${startMsg}" data-end="${endMsg}" title="Edit in fullscreen">
+						<i class="fa-solid fa-expand"></i>
+					</button>
+				</div>
+				<textarea class="rmr-summary-text text_pole" data-chapter="${chapterNum}">${escapeHtml(chapter.summary || '')}</textarea>
+				<div class="rmr-summary-actions">
+					<button type="button" class="menu_button rmr-save-summary" data-chapter="${chapterNum}" disabled>Save</button>
+				</div>
+			</div>
+		`);
+
+		container.append(summaryItem);
+	});
+
+	// Store original values and handle change detection
+	container.find('.rmr-summary-text').each(function() {
+		const textarea = $(this);
+		textarea.data('original', textarea.val());
+
+		textarea.on('input', function() {
+			const chapterNum = $(this).data('chapter');
+			const saveBtn = container.find(`.rmr-save-summary[data-chapter="${chapterNum}"]`);
+			const hasChanged = $(this).val() !== $(this).data('original');
+			saveBtn.prop('disabled', !hasChanged);
+		});
+	});
+
+	// Handle save button clicks
+	container.find('.rmr-save-summary').on('click', async function() {
+		const chapterNum = $(this).data('chapter');
+		const textarea = container.find(`.rmr-summary-text[data-chapter="${chapterNum}"]`);
+		const newSummary = textarea.val();
+
+		const success = updateChapterSummary(chapterNum, newSummary);
+
+		if (success) {
+			textarea.data('original', newSummary);
+			$(this).prop('disabled', true);
+			toastr.success(`Chapter ${chapterNum} summary updated.`, 'Timeline Memory');
+		} else {
+			toastr.error(`Failed to update chapter ${chapterNum} summary.`, 'Timeline Memory');
+		}
+	});
+
+	// Handle expand button clicks to open popup
+	container.find('.rmr-summary-expand').on('click', function() {
+		const chapterNum = $(this).data('chapter');
+		const startMsg = $(this).data('start');
+		const endMsg = $(this).data('end');
+		const textarea = container.find(`.rmr-summary-text[data-chapter="${chapterNum}"]`);
+		const currentText = textarea.val();
+
+		openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapterSummary);
+	});
+}
+
+// Open the fullscreen summary popup
+function openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapterSummary) {
+	const popup = $('#rmr_summary_popup');
+	const popupTextarea = $('#rmr_popup_textarea');
+	const saveBtn = $('#rmr_popup_save');
+
+	// Set popup content
+	$('#rmr_popup_chapter_num').text(chapterNum);
+	$('#rmr_popup_range').text(`Messages ${startMsg} - ${endMsg}`);
+	popupTextarea.val(currentText);
+	popupTextarea.data('original', currentText);
+	popupTextarea.data('chapter', chapterNum);
+	saveBtn.prop('disabled', true);
+
+	// Show popup
+	popup.css('display', 'flex');
+
+	// Focus textarea
+	popupTextarea.focus();
+
+	// Handle text changes
+	popupTextarea.off('input').on('input', function() {
+		const hasChanged = $(this).val() !== $(this).data('original');
+		saveBtn.prop('disabled', !hasChanged);
+	});
+
+	// Handle save
+	saveBtn.off('click').on('click', async function() {
+		const newSummary = popupTextarea.val();
+		const chapter = popupTextarea.data('chapter');
+
+		const success = updateChapterSummary(chapter, newSummary);
+
+		if (success) {
+			// Update the inline textarea as well
+			const inlineTextarea = $(`.rmr-summary-text[data-chapter="${chapter}"]`);
+			inlineTextarea.val(newSummary);
+			inlineTextarea.data('original', newSummary);
+			$(`.rmr-save-summary[data-chapter="${chapter}"]`).prop('disabled', true);
+
+			// Update popup state
+			popupTextarea.data('original', newSummary);
+			saveBtn.prop('disabled', true);
+
+			toastr.success(`Chapter ${chapter} summary updated.`, 'Timeline Memory');
+			closeSummaryPopup();
+		} else {
+			toastr.error(`Failed to update chapter ${chapter} summary.`, 'Timeline Memory');
+		}
+	});
+
+	// Handle cancel/close
+	$('#rmr_popup_cancel').off('click').on('click', closeSummaryPopup);
+	$('#rmr_popup_close').off('click').on('click', closeSummaryPopup);
+
+	// Handle clicking outside popup to close
+	popup.off('click').on('click', function(e) {
+		if (e.target === this) {
+			closeSummaryPopup();
+		}
+	});
+
+	// Handle escape key to close
+	$(document).off('keydown.summaryPopup').on('keydown.summaryPopup', function(e) {
+		if (e.key === 'Escape') {
+			closeSummaryPopup();
+		}
+	});
+}
+
+// Close the fullscreen summary popup
+function closeSummaryPopup() {
+	$('#rmr_summary_popup').hide();
+	$(document).off('keydown.summaryPopup');
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+	const div = document.createElement('div');
+	div.textContent = text;
+	return div.innerHTML;
 }

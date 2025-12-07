@@ -1,7 +1,7 @@
 import { eventSource, event_types } from "../../../../script.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
-import { loadSettings, changeCharaName } from "./src/settings.js";
+import { loadSettings, changeCharaName, renderSummariesList } from "./src/settings.js";
 import { initTimelineMacro, loadTimelineData, resetTimelineFillResults } from "./src/memories.js";
 
 export const extension_name = 'timeline-memory';
@@ -57,6 +57,7 @@ jQuery(async () => {
 			}
 			loadTimelineData();
 			resetMessageButtons();
+			renderSummariesList();
 		});
 		eventSource.on(event_types.MESSAGE_SENT, resetTimelineFillResults);
 		eventSource.on(event_types.MORE_MESSAGES_LOADED, resetMessageButtons);
