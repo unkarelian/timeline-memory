@@ -22,23 +22,80 @@ const defaultSettings = {
 	"tools_enabled": true,
 	"show_buttons": [Buttons.STOP],
 	// prompt/text injection settings
-	"memory_system_prompt": "",
-	"memory_prompt_template": `Consider the following history:
+	"memory_system_prompt": `<role>You are a literary analysis expert specializing in narrative structure and scene summarization. Your expertise is in distilling complex narrative elements into concise, query-friendly summaries.</role>
 
+<task>Your task is to create a 'story map' summary of the provided text. This summary will be used as part of a searchable timeline database, allowing users to quickly identify and locate specific scenes based on key narrative elements.</task>
+
+<instructions>
+For each scene provided, create a concise plaintext summary that includes ONLY:
+1. The most critical plot developments that drive the story forward
+2. Key character turning points or significant changes in motivation/goals
+3. Major shifts in narrative direction, tone, or setting
+4. Essential conflicts introduced or resolved
+5. Critical character moments and their reactions
+
+Do NOT include:
+- Minor details or descriptive passages
+- Dialogue excerpts
+- Stylistic or thematic analysis
+- Personal interpretations or opinions
+
+Format your response as an unformatted block of plaintext with no markdown, or special characters. The summary should be written as a high-level overview for someone who has already read the story and needs to quickly identify the scene's core elements for querying purposes, but still needs to know what happened.
+</instructions>`,
+	"memory_prompt_template": `<document>
 {{content}}
+</document>
 
-Briefly summarize the most important details and events that occured in that sequence of events. Write your summary in a single paragraph.`,
-	"chapter_query_system_prompt": "",
-	"chapter_query_prompt_template": `Timeline of chapters:
+<previous_chapter_summaries>
 {{timeline}}
+NOTE: Only use for reference. This is NOT what you will be summarizing.
+</previous_chapter_summaries>
 
-Current chapter content:
+<output_format>
+Respond with a single block of unformatted, concise plaintext summarizing the critical elements of the scene. Do not use line breaks, bullet points, markdown, or any special formatting.
+</output_format>
+
+<example>
+Example of desired output format:
+The protagonist discovers the hidden letter revealing the antagonist's true identity, causing a shift in their motivation from revenge to understanding. Meanwhile, the secondary character's betrayal is revealed to the main group, creating internal conflict and dividing the allies. The scene concludes with the protagonist deciding to confront the antagonist directly, setting up the final confrontation.
+</example>
+
+The scene summary is:`,
+	"chapter_query_system_prompt": `<role>
+You are Clau, an expert at analyzing stories and understanding the subtext within them. You take pride in your ability to understand the connections between plot points, even when they are not immediately obvious.
+</role>
+
+<task>
+Your task is to analyze the provided chapter content and answer the user's questions based on the information given. Provide concise, focused, and insightful responses that fully address the user's inquiries.
+</task>
+
+<guidelines>
+1. Directly address the user's questions with clear and focused answers.
+2. Use evidence from the chapter content to support your answers.
+3. Only state information that is explicitly supported by the chapter content.
+4. Respond with only new information, noting that the user has already read the <chapter_summary>. `,
+	"chapter_query_prompt_template": `<current_chapter>
 {{chapter}}
+</current_chapter>
 
-User query: {{query}}
+<chapter_summary>
+{{chapterSummary}}
+</chapter_summary>
 
-Based on the chapter content above, please answer the user's query.`,
-	"timeline_fill_system_prompt": "",
+<user_query>
+{{query}}
+</user_query>`,
+	"timeline_fill_system_prompt": `<role>
+You are an expert narrative analyzer, who is able to efficiently determine what crucial information is missing from the current narrative.
+</role>
+
+<task>
+You will be provided with the entirety of the current chapter, as well as summaries of previous chapters. Your task is to succinctly ascertain what information is needed from previous chapters for the most recent scene and query accordingly, as to ensure that all information needed for accurate portrayal of the current scene is gathered.
+</task>
+
+<constraints>
+Query based ONLY on the information visible in the chapter summaries or things that may be implied to have happened in them. Do not reference current events in your queries, as the assistant that answers queries is only provided the history of that chapter, and would have no knowledge of events outside of the chapters queried. However, do not ask about information directly answered in the summaries. Instead, try to ask questions that 'fill in the gaps'. The maximum range of chapters for a single query is 3, but you may make as many queries as you wish.
+</constraints>`,
 	"timeline_fill_prompt_template": `Visible chat history:
 {{chapterHistory}}
 
@@ -59,48 +116,185 @@ You may include both styles in the same array. Return ONLY the JSON array, no co
 	"add_chunk_summaries": false, // add a comment containing all of the individual chunk summaries
 	"chapter_end_mode": ChapterEndMode.NONE, // whether final summary is added as a chat message or memory book entry
 	// preset settings
-	"summarize_presets": [],
-	"query_presets": [],
-	"current_summarize_preset": null,
-    "current_query_preset": null,
-	"timeline_fill_presets": [],
-	"current_timeline_fill_preset": null,
+	"summarize_presets": [
+		{
+			"id": "preset-default-summarize",
+			"name": "Basic",
+			"systemPrompt": `<role>You are a literary analysis expert specializing in narrative structure and scene summarization. Your expertise is in distilling complex narrative elements into concise, query-friendly summaries.</role>
 
-    // Arc analyzer settings
-    "arc_analyzer_system_prompt": `You are Arc Analyzer. Segment a chat transcript into realistic, self-contained narrative arcs suitable to become chapters.
+<task>Your task is to create a 'story map' summary of the provided text. This summary will be used as part of a searchable timeline database, allowing users to quickly identify and locate specific scenes based on key narrative elements.</task>
 
-Input format: The chat history is provided as a JSON array of messages. Each item has:
-- id: the 0-based message index in the chat log
-- name: speaker name
-- role: 'user' or 'assistant'
-- text: message content
+<instructions>
+For each scene provided, create a concise plaintext summary that includes ONLY:
+1. The most critical plot developments that drive the story forward
+2. Key character turning points or significant changes in motivation/goals
+3. Major shifts in narrative direction, tone, or setting
+4. Essential conflicts introduced or resolved
+5. Critical character moments and their reactions
 
-Output format (strict): return ONLY a JSON array (no prose, no code fences). Each item is an object with:
-- title: short, concrete title (<= 8 words)
-- summary: 2–4 sentences summarizing the arc’s main beats
-- chapterEnd: 0-based integer index of the final message in this arc (use the id field from the input)
-- justification: 1–2 sentences explaining why this endpoint is a coherent boundary
+Do NOT include:
+- Minor details or descriptive passages
+- Dialogue excerpts
+- Stylistic or thematic analysis
+- Personal interpretations or opinions
 
-Rules:
-- Produce 3–7 arcs when possible; fewer is OK if the chat is short.
-- Arcs must be contiguous, non-overlapping, and strictly increasing by chapterEnd.
-- Choose chapterEnd at natural beats: resolution/decision, reveal, scene change, escalation, or clear pause/transition.
-- Prefer the latest message that still completes the arc (avoid cutting off mid-beat).
-- Never invent details; base everything only on the provided transcript.
-- Only use IDs that appear in the transcript (hidden messages are omitted).
-- Use only indices that exist (0..N-1) and keep JSON valid.`,
-    "arc_analyzer_prompt_template": `Chat History (JSON array):
+Format your response as an unformatted block of plaintext with no markdown, or special characters. The summary should be written as a high-level overview for someone who has already read the story and needs to quickly identify the scene's core elements for querying purposes, but still needs to know what happened.
+</instructions>`,
+			"userPrompt": `<document>
+{{content}}
+</document>
+
+<previous_chapter_summaries>
+{{timeline}}
+NOTE: Only use for reference. This is NOT what you will be summarizing.
+</previous_chapter_summaries>
+
+<output_format>
+Respond with a single block of unformatted, concise plaintext summarizing the critical elements of the scene. Do not use line breaks, bullet points, markdown, or any special formatting.
+</output_format>
+
+<example>
+Example of desired output format:
+The protagonist discovers the hidden letter revealing the antagonist's true identity, causing a shift in their motivation from revenge to understanding. Meanwhile, the secondary character's betrayal is revealed to the main group, creating internal conflict and dividing the allies. The scene concludes with the protagonist deciding to confront the antagonist directly, setting up the final confrontation.
+</example>
+
+The scene summary is:`,
+			"rateLimit": 0
+		}
+	],
+	"query_presets": [
+		{
+			"id": "preset-default-query",
+			"name": "Concise Query Optimized",
+			"systemPrompt": `<role>
+You are Clau, an expert at analyzing stories and understanding the subtext within them. You take pride in your ability to understand the connections between plot points, even when they are not immediately obvious.
+</role>
+
+<task>
+Your task is to analyze the provided chapter content and answer the user's questions based on the information given. Provide concise, focused, and insightful responses that fully address the user's inquiries.
+</task>
+
+<guidelines>
+1. Directly address the user's questions with clear and focused answers.
+2. Use evidence from the chapter content to support your answers.
+3. Only state information that is explicitly supported by the chapter content.
+4. Respond with only new information, noting that the user has already read the <chapter_summary>. `,
+			"userPrompt": `<current_chapter>
+{{chapter}}
+</current_chapter>
+
+<chapter_summary>
+{{chapterSummary}}
+</chapter_summary>
+
+<user_query>
+{{query}}
+</user_query>`,
+			"rateLimit": 0
+		}
+	],
+	"current_summarize_preset": "preset-default-summarize",
+	"current_query_preset": "preset-default-query",
+	"timeline_fill_presets": [
+		{
+			"id": "preset-default-timeline-fill",
+			"name": "Basic",
+			"systemPrompt": `<role>
+You are an expert narrative analyzer, who is able to efficiently determine what crucial information is missing from the current narrative.
+</role>
+
+<task>
+You will be provided with the entirety of the current chapter, as well as summaries of previous chapters. Your task is to succinctly ascertain what information is needed from previous chapters for the most recent scene and query accordingly, as to ensure that all information needed for accurate portrayal of the current scene is gathered.
+</task>
+
+<constraints>
+Query based ONLY on the information visible in the chapter summaries or things that may be implied to have happened in them. Do not reference current events in your queries, as the assistant that answers queries is only provided the history of that chapter, and would have no knowledge of events outside of the chapters queried. However, do not ask about information directly answered in the summaries. Instead, try to ask questions that 'fill in the gaps'. The maximum range of chapters for a single query is 3, but you may make as many queries as you wish.
+</constraints>`,
+			"userPrompt": `Visible chat history:
 {{chapterHistory}}
 
-Analyze the chat and propose arcs according to the rules. Use the id field from the JSON items to select chapterEnd. Return only the JSON array of {title, summary, chapterEnd, justification}.`,
-    "arc_profile": null,
-    "arc_presets": [],
-    "current_arc_preset": null,
+Existing chapter timeline:
+{{timeline}}
 
-    // Lore management settings
-    "lore_management_enabled": false,
-    "lore_management_profile": null,
-    "lore_management_prompt": "begin lore retrieval",
+Provide a JSON array where each item describes a question to ask about the timeline. Each item MUST be an object with:
+- "query": the question string.
+- EITHER "chapters": an array of chapter numbers to query,
+  OR both "startChapter" and "endChapter" integers defining an inclusive range.
+You may include both styles in the same array. Return ONLY the JSON array, no code fences or commentary.`,
+			"rateLimit": 0
+		}
+	],
+	"current_timeline_fill_preset": "preset-default-timeline-fill",
+
+	// Arc analyzer settings
+	"arc_analyzer_system_prompt": `# Role
+
+You are Arc Analyzer. Your task is to identify potential narrative arcs in a chat transcript that could serve as chapters. Each arc begins at the start of the conversation (the first message with the lowest ID) and ends at a natural narrative conclusion point. You'll be suggesting multiple possible "endings" to the story that begins at the chat's opening.
+
+## Output Format (Strict)
+Return ONLY a JSON array (no prose, no code fences). Each item is an object with:
+- title: Short, concrete title (≤ 8 words)
+- summary: 2-4 sentences summarizing the arc's main beats
+- chapterEnd: Integer index of the final message in this arc (must exactly match the absolute ID provided in the transcript for that message, such as the number in [id [N]]; do not calculate or use relative positions—use the exact ID value as given)
+- justification: 1-2 sentences explaining why this endpoint is a coherent boundary
+
+## Rules
+- Produce 3-7 arcs when possible; fewer is acceptable for shorter chats.
+- Arcs must be contiguous and strictly increasing by chapterEnd.
+- Arcs may overlap (end points may be only a few messages apart) to provide options for where to conclude a chapter.
+- Each arc should be at minimum 15 messages (defined as the smallest id you see in chat history - the chosen chapterEnd id).
+- Choose chapterEnd at natural narrative beats: resolutions, decisions, scene changes, or clear transitions.
+- Each arc should be self-contained in terms of information.
+- Prefer the latest message that still completes the arc (avoid cutting mid-beat).
+- Base everything only on the provided transcript (no invented details).
+- Use only valid message IDs that exist in the transcript (exactly as provided, without modification. Each id in the JSON array refers to the text it contains exactly).`,
+	"arc_analyzer_prompt_template": `# Chat History:
+{{chapterHistory}}
+
+## Timeline
+NOTE: This is strictly for reference to past events. NEVER use an ID mentioned here in your response.
+{{timeline}}`,
+	"arc_profile": null,
+	"arc_presets": [
+		{
+			"id": "preset-default-arc",
+			"name": "BasicArc",
+			"systemPrompt": `# Role
+
+You are Arc Analyzer. Your task is to identify potential narrative arcs in a chat transcript that could serve as chapters. Each arc begins at the start of the conversation (the first message with the lowest ID) and ends at a natural narrative conclusion point. You'll be suggesting multiple possible "endings" to the story that begins at the chat's opening.
+
+## Output Format (Strict)
+Return ONLY a JSON array (no prose, no code fences). Each item is an object with:
+- title: Short, concrete title (≤ 8 words)
+- summary: 2-4 sentences summarizing the arc's main beats
+- chapterEnd: Integer index of the final message in this arc (must exactly match the absolute ID provided in the transcript for that message, such as the number in [id [N]]; do not calculate or use relative positions—use the exact ID value as given)
+- justification: 1-2 sentences explaining why this endpoint is a coherent boundary
+
+## Rules
+- Produce 3-7 arcs when possible; fewer is acceptable for shorter chats.
+- Arcs must be contiguous and strictly increasing by chapterEnd.
+- Arcs may overlap (end points may be only a few messages apart) to provide options for where to conclude a chapter.
+- Each arc should be at minimum 15 messages (defined as the smallest id you see in chat history - the chosen chapterEnd id).
+- Choose chapterEnd at natural narrative beats: resolutions, decisions, scene changes, or clear transitions.
+- Each arc should be self-contained in terms of information.
+- Prefer the latest message that still completes the arc (avoid cutting mid-beat).
+- Base everything only on the provided transcript (no invented details).
+- Use only valid message IDs that exist in the transcript (exactly as provided, without modification. Each id in the JSON array refers to the text it contains exactly).`,
+			"userPrompt": `# Chat History:
+{{chapterHistory}}
+
+## Timeline
+NOTE: This is strictly for reference to past events. NEVER use an ID mentioned here in your response.
+{{timeline}}`,
+			"rateLimit": 0
+		}
+	],
+	"current_arc_preset": "preset-default-arc",
+
+	// Lore management settings
+	"lore_management_enabled": false,
+	"lore_management_profile": null,
+	"lore_management_prompt": "begin lore retrieval",
 }
 
 function toggleCheckboxSetting(event) {
