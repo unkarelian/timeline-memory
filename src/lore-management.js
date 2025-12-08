@@ -94,6 +94,8 @@ const loreManagementState = {
 };
 
 const MAX_RETRIES = 5;  // Maximum number of consecutive retries before aborting
+const SWIPE_RETRY_DELAYS = [500, 1000, 2000, 3000];  // Delays between swipe attempts (ms)
+const TRIGGER_RETRY_DELAYS = [500, 1000, 2000, 3000];  // Delays between trigger attempts (ms)
 
 const LORE_MANAGEMENT_METADATA_KEY = 'lore_management_session';
 
@@ -691,41 +693,100 @@ function onGenerationEnded() {
 
     // Use setTimeout to not block the event handler
     setTimeout(async () => {
-        if (!loreManagementState.active || loreManagementState.endRequested) {
+        log('Retry callback executing...');
+
+        if (!loreManagementState.active) {
+            log('Bailing: session no longer active');
+            return;
+        }
+        if (loreManagementState.endRequested) {
+            log('Bailing: end was requested');
             return;
         }
 
-        // Wait for swiping to be allowed (also indicates generation is done)
-        const ready = await waitForSwipeReady();
-        if (!ready) {
-            error('Timed out waiting for generation to complete');
-            return;
-        }
-
-        if (!loreManagementState.active || loreManagementState.endRequested) {
-            return;
-        }
-
-        // Try to swipe first (regenerate the last message)
-        log('Attempting swipe...');
-        try {
-            await executeSlashCommandsWithOptions('/swipes-swipe');
-            log('Swipe completed');
-        } catch (swipeErr) {
-            // Swipe failed (likely tool result message) - fall back to triggering new generation
-            log('Swipe failed, triggering new generation instead:', swipeErr.message);
-
+        // Try swipe attempts with increasing delays
+        let swipeSucceeded = false;
+        for (let i = 0; i < SWIPE_RETRY_DELAYS.length; i++) {
             if (!loreManagementState.active || loreManagementState.endRequested) {
+                log('Bailing: session state changed during swipe retries');
                 return;
             }
 
+            // Wait for UI to settle
+            log(`Swipe attempt ${i + 1}/${SWIPE_RETRY_DELAYS.length}: waiting for swipe to be allowed...`);
+            const ready = await waitForSwipeReady(10000, 200);
+
+            if (!ready) {
+                log(`Swipe attempt ${i + 1}: timed out waiting for swipe readiness`);
+                if (i < SWIPE_RETRY_DELAYS.length - 1) {
+                    log(`Waiting ${SWIPE_RETRY_DELAYS[i]}ms before next swipe attempt...`);
+                    await new Promise(resolve => setTimeout(resolve, SWIPE_RETRY_DELAYS[i]));
+                }
+                continue;
+            }
+
+            // On first attempt, wait extra 5 seconds for UI to fully settle
+            if (i === 0) {
+                log('Swipe allowed - waiting 5 seconds for UI to fully settle...');
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                if (!loreManagementState.active || loreManagementState.endRequested) {
+                    log('Bailing: session state changed during initial delay');
+                    return;
+                }
+            }
+
+            if (!loreManagementState.active || loreManagementState.endRequested) {
+                log('Bailing: session state changed after swipe wait');
+                return;
+            }
+
+            log(`Swipe attempt ${i + 1}: executing swipe...`);
             try {
-                await executeSlashCommandsWithOptions('/trigger');
-                log('New generation triggered');
-            } catch (triggerErr) {
-                error('Error triggering new generation:', triggerErr);
+                await executeSlashCommandsWithOptions('/swipes-swipe');
+                log('Swipe completed successfully');
+                swipeSucceeded = true;
+                break;
+            } catch (swipeErr) {
+                log(`Swipe attempt ${i + 1} failed: ${swipeErr.message}`);
+                if (i < SWIPE_RETRY_DELAYS.length - 1) {
+                    log(`Waiting ${SWIPE_RETRY_DELAYS[i]}ms before next swipe attempt...`);
+                    await new Promise(resolve => setTimeout(resolve, SWIPE_RETRY_DELAYS[i]));
+                }
             }
         }
+
+        if (swipeSucceeded) {
+            return;  // Swipe worked, new generation will be triggered automatically
+        }
+
+        // All swipe attempts failed - try trigger attempts with increasing delays
+        log('All swipe attempts failed, trying trigger instead...');
+
+        for (let i = 0; i < TRIGGER_RETRY_DELAYS.length; i++) {
+            if (!loreManagementState.active || loreManagementState.endRequested) {
+                log('Bailing: session state changed during trigger retries');
+                return;
+            }
+
+            log(`Trigger attempt ${i + 1}/${TRIGGER_RETRY_DELAYS.length}: executing trigger...`);
+            try {
+                await executeSlashCommandsWithOptions('/trigger');
+                log('Trigger completed successfully');
+                return;  // Trigger worked
+            } catch (triggerErr) {
+                log(`Trigger attempt ${i + 1} failed: ${triggerErr.message}`);
+                if (i < TRIGGER_RETRY_DELAYS.length - 1) {
+                    log(`Waiting ${TRIGGER_RETRY_DELAYS[i]}ms before next trigger attempt...`);
+                    await new Promise(resolve => setTimeout(resolve, TRIGGER_RETRY_DELAYS[i]));
+                }
+            }
+        }
+
+        // All attempts failed - abort the session
+        error('All swipe and trigger attempts failed, aborting lore management session');
+        toastr.error('Lore management aborted: Failed to retry after AI did not make a tool call', 'Timeline Memory');
+        abortLoreManagementSession();
     }, 0);
 }
 
