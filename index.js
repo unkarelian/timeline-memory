@@ -42,12 +42,17 @@ jQuery(async () => {
 		eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHAT_CHANGED, async (chatId)=>{
 			if (!chatId) return;
-			// Abort any active lore management session when chat changes
+			// Abort any active lore management session when chat changes to a DIFFERENT chat
 			// Also check for and recover from interrupted sessions (e.g., page refresh)
 			try {
-				const { abortLoreManagementSession, isLoreManagementActive, recoverInterruptedSession } = await import('./src/lore-management.js');
+				const { abortLoreManagementSession, isLoreManagementActive, getSessionChatId, recoverInterruptedSession } = await import('./src/lore-management.js');
 				if (isLoreManagementActive()) {
-					await abortLoreManagementSession();
+					// Only abort if we're switching to a different chat
+					// (CHAT_CHANGED also fires during save/reload of the same chat)
+					const sessionChatId = getSessionChatId();
+					if (sessionChatId && chatId !== sessionChatId) {
+						await abortLoreManagementSession();
+					}
 				} else {
 					// Check for interrupted session that needs recovery
 					await recoverInterruptedSession();

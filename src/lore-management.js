@@ -89,6 +89,7 @@ const loreManagementState = {
     endRequested: false,
     hiddenMessageStart: -1,  // First message index that was hidden
     hiddenMessageEnd: -1,    // Last message index that was hidden
+    sessionChatId: null,     // Chat ID when session started (to detect actual chat switches)
 };
 
 const LORE_MANAGEMENT_METADATA_KEY = 'lore_management_session';
@@ -107,6 +108,7 @@ function saveStateToMetadata() {
         startMessageIndex: loreManagementState.startMessageIndex,
         hiddenMessageStart: loreManagementState.hiddenMessageStart,
         hiddenMessageEnd: loreManagementState.hiddenMessageEnd,
+        sessionChatId: loreManagementState.sessionChatId,
     };
     log('Saved lore management state to metadata');
 }
@@ -186,6 +188,14 @@ export async function recoverInterruptedSession() {
  */
 export function isLoreManagementActive() {
     return loreManagementState.active;
+}
+
+/**
+ * Get the chat ID associated with the current lore management session
+ * @returns {string|null} The chat ID or null if no session is active
+ */
+export function getSessionChatId() {
+    return loreManagementState.sessionChatId;
 }
 
 /**
@@ -585,11 +595,13 @@ export async function startLoreManagementSession() {
     loreManagementState.endRequested = false;
     loreManagementState.hiddenMessageStart = -1;
     loreManagementState.hiddenMessageEnd = -1;
+    loreManagementState.sessionChatId = context.getCurrentChatId?.() || null;
     loreManagementState.active = true;
 
     log('Starting lore management session');
     log(`Saved profile: ${loreManagementState.savedProfileName || 'none'}`);
     log(`Start message index: ${loreManagementState.startMessageIndex}`);
+    log(`Session chat ID: ${loreManagementState.sessionChatId}`);
 
     try {
         // Hide existing messages to give the AI a clean slate
@@ -737,6 +749,7 @@ async function cleanupLoreManagementSession() {
         loreManagementState.endRequested = false;
         loreManagementState.hiddenMessageStart = -1;
         loreManagementState.hiddenMessageEnd = -1;
+        loreManagementState.sessionChatId = null;
     }
 }
 
