@@ -2,3 +2,161 @@
   color: var(--SmartThemeEmColor);
   opacity: 0.5;
 }
+
+/* Tutorial Popup - Non-blocking, draggable */
+#rmr-tutorial-popup {
+  position: fixed;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  background: var(--SmartThemeBlurTintColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto; /* Only the popup captures clicks */
+}
+
+.rmr-tutorial-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--SmartThemeBorderColor);
+  cursor: grab;
+  user-select: none;
+  gap: 8px;
+}
+
+.rmr-tutorial-header:active {
+  cursor: grabbing;
+}
+
+.rmr-tutorial-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--SmartThemeEmColor);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rmr-tutorial-step-indicator {
+  font-size: 11px;
+  color: var(--SmartThemeQuoteColor);
+  white-space: nowrap;
+}
+
+.rmr-tutorial-close {
+  background: none;
+  border: none;
+  color: var(--SmartThemeBodyColor);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.rmr-tutorial-close:hover {
+  opacity: 1;
+}
+
+.rmr-tutorial-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--SmartThemeBodyColor);
+}
+
+.rmr-tutorial-body b {
+  color: var(--SmartThemeEmColor);
+}
+
+.rmr-tutorial-body i {
+  color: var(--SmartThemeEmColor);
+}
+
+.rmr-tutorial-body pre,
+.rmr-tutorial-body code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  display: block;
+  margin: 8px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-left: 3px solid var(--SmartThemeEmColor);
+}
+
+.rmr-tutorial-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--SmartThemeBorderColor);
+  gap: 10px;
+}
+
+.rmr-tutorial-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.rmr-tutorial-btn.rmr-tutorial-next {
+  margin-left: auto;
+}
+
+/* Highlight effect for referenced elements */
+.rmr-tutorial-highlighted {
+  outline: 2px solid var(--SmartThemeEmColor) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 12px var(--SmartThemeEmColor);
+  animation: rmr-highlight-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes rmr-highlight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px var(--SmartThemeEmColor);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--SmartThemeEmColor);
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 500px) {
+  #rmr-tutorial-popup {
+    width: calc(100vw - 20px);
+    right: 10px !important;
+    left: 10px !important;
+    bottom: 10px !important;
+  }
+}
+
+/* Quick Reply Buttons in Send Form */
+.rmr-quick-reply-btn {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.rmr-quick-reply-btn:hover {
+  opacity: 1;
+  color: var(--SmartThemeEmColor);
+}
+
+.rmr-quick-reply-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}

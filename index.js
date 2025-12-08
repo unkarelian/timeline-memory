@@ -1,8 +1,9 @@
 import { eventSource, event_types } from "../../../../script.js";
+import { getContext } from "../../../extensions.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
 import { loadSettings, changeCharaName, renderSummariesList } from "./src/settings.js";
-import { initTimelineMacro, loadTimelineData, resetTimelineFillResults } from "./src/memories.js";
+import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection } from "./src/memories.js";
 
 export const extension_name = 'timeline-memory';
 
@@ -29,6 +30,71 @@ function checkVersion(version_string) {
 	else return true;
 }
 
+function initQuickReplyButtons() {
+	const rightSendForm = $('#rightSendForm');
+	if (!rightSendForm.length) return;
+
+	// Remove existing buttons if any (in case of re-initialization)
+	rightSendForm.find('.rmr-quick-reply-btn').remove();
+
+	// Retrieve and Send button
+	const retrieveAndSendBtn = $(`
+		<div id="rmr-retrieve-send"
+			class="fa-solid fa-comment-dots rmr-quick-reply-btn interactable"
+			title="Retrieve and Send - Send message with timeline context"
+			tabindex="0">
+		</div>
+	`);
+
+	// Retrieve and Swipe button
+	const retrieveAndSwipeBtn = $(`
+		<div id="rmr-retrieve-swipe"
+			class="fa-solid fa-rotate rmr-quick-reply-btn interactable"
+			title="Retrieve and Swipe - Refresh with timeline context"
+			tabindex="0">
+		</div>
+	`);
+
+	// Insert before the send button
+	const sendButton = rightSendForm.find('#send_but');
+	if (sendButton.length) {
+		retrieveAndSwipeBtn.insertBefore(sendButton);
+		retrieveAndSendBtn.insertBefore(retrieveAndSwipeBtn);
+	} else {
+		// Fallback: append to rightSendForm
+		rightSendForm.append(retrieveAndSendBtn);
+		rightSendForm.append(retrieveAndSwipeBtn);
+	}
+
+	// Click handler for Retrieve and Send
+	retrieveAndSendBtn.on('click', async () => {
+		if (retrieveAndSendBtn.hasClass('disabled')) return;
+		retrieveAndSendBtn.addClass('disabled');
+		try {
+			await getContext().executeSlashCommandsWithOptions('/send {{input}} | /setinput | /timeline-fill await=true | /trigger |');
+		} catch (err) {
+			console.error('Timeline Memory: Retrieve and Send failed:', err);
+			toastr.error('Retrieve and Send failed: ' + err.message, 'Timeline Memory');
+		} finally {
+			retrieveAndSendBtn.removeClass('disabled');
+		}
+	});
+
+	// Click handler for Retrieve and Swipe
+	retrieveAndSwipeBtn.on('click', async () => {
+		if (retrieveAndSwipeBtn.hasClass('disabled')) return;
+		retrieveAndSwipeBtn.addClass('disabled');
+		try {
+			await getContext().executeSlashCommandsWithOptions('/hide {{lastMessageId}} | /timeline-fill await=true | /unhide {{lastMessageId}} |');
+		} catch (err) {
+			console.error('Timeline Memory: Retrieve and Swipe failed:', err);
+			toastr.error('Retrieve and Swipe failed: ' + err.message, 'Timeline Memory');
+		} finally {
+			retrieveAndSwipeBtn.removeClass('disabled');
+		}
+	});
+}
+
 jQuery(async () => {
 	const res = await fetch('/version');
 	STVersion = await res.json();
@@ -37,6 +103,10 @@ jQuery(async () => {
 			loadSettings();
 			initTimelineMacro();
 			loadSlashCommands();
+			// Initialize timeline injection after settings are loaded
+			updateTimelineInjection();
+			// Initialize quick reply buttons in send form
+			initQuickReplyButtons();
 		});
 		eventSource.on(event_types.USER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));

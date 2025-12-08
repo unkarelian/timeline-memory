@@ -7,6 +7,11 @@
 		<div class="inline-drawer-content">
 			<h4>General Settings</h4>
 			<div class="rmr-extension_block">
+				<div class="flex-container" style="gap: 10px; margin-bottom: 10px;">
+					<button type="button" class="menu_button" id="rmr_start_tutorial">
+						<i class="fa-solid fa-graduation-cap"></i> Start Tutorial
+					</button>
+				</div>
 				<label class="checkbox_label" for="rmr_tools_enabled">
 					<input id="rmr_tools_enabled" class="checkbox" type="checkbox" />
 					Enable Tool/Function Calls for Chapter Queries
@@ -289,6 +294,35 @@
 					<input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox" />
 					Add chunk summaries (when there are more than one) as comment
 				</label>
+			</div>
+			<hr>
+			<h4>Inject at Depth</h4>
+			<div class="rmr-extension_block">
+				<label class="checkbox_label" for="rmr_inject_enabled">
+					<input id="rmr_inject_enabled" class="checkbox" type="checkbox" />
+					Enable Timeline Injection
+				</label>
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_inject_depth">
+							<small>Injection Depth</small>
+						</label>
+						<input class="text_pole widthUnset" id="rmr_inject_depth" type="number" min="0" max="999" value="0" />
+					</div>
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_inject_role">
+							<small>Injection Role</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_inject_role">
+						</select>
+					</div>
+				</div>
+				<div class="flex-container flex1 flexFlowColumn marginTopBot5">
+					<label for="rmr_inject_prompt">
+						<small>Injection Prompt Template</small>
+					</label>
+					<textarea placeholder="Prompt to inject at depth..." rows="8" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
+				</div>
 			</div>
 			<hr>
 		</div>

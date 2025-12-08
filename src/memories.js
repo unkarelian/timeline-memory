@@ -6,7 +6,7 @@ import { settings, ChapterEndMode } from "./settings.js";
 import { toggleChapterHighlight } from "./messages.js";
 import { debug } from "./logging.js";
 import { ConnectionManagerRequestService } from "../../../shared.js";
-import { amount_gen, main_api } from "../../../../../script.js";
+import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from "../../../../../script.js";
 import { oai_settings, openai_settings, chat_completion_sources, reasoning_effort_types } from "../../../../../scripts/openai.js";
 import { reasoning_templates } from "../../../../../scripts/reasoning.js";
 import { getPresetManager } from "../../../../../scripts/preset-manager.js";
@@ -220,11 +220,15 @@ export function setTimelineFillResults(results) {
 		timelineFillResults = [];
 	}
 	saveTimelineFillResults();
+	// Update injection prompt with new data
+	updateTimelineInjection();
 }
 
 export function resetTimelineFillResults() {
 	timelineFillResults = [];
 	saveTimelineFillResults();
+	// Update injection prompt with new data
+	updateTimelineInjection();
 }
 
 export function getTimelineEntries() {
@@ -500,6 +504,86 @@ export function initTimelineMacro() {
         }
         return timelineFillResults;
     }, 'Latest timeline fill query results as JSON array of { chapters | startChapter,endChapter, query, response }');
+
+    // Register lastMessageId macro - returns the ID of the most recent message
+    MacrosParser.registerMacro('lastMessageId', () => {
+        const context = getContext();
+        const chat = context.chat || [];
+        return Math.max(0, chat.length - 1);
+    }, 'The ID of the most recent message in the chat');
+
+    // Register firstIncludedMessageId macro - returns the ID of the first message after the last chapter end
+    MacrosParser.registerMacro('firstIncludedMessageId', () => {
+        const context = getContext();
+        const chat = context.chat || [];
+        if (!chat.length) return 0;
+
+        // Find the last chapter end marker
+        let lastChapterEnd = -1;
+        for (let i = chat.length - 1; i >= 0; i--) {
+            if (chat[i].extra?.rmr_chapter) {
+                lastChapterEnd = i;
+                break;
+            }
+        }
+
+        // Return the message after the last chapter end, or 0 if no chapters
+        return lastChapterEnd >= 0 ? lastChapterEnd + 1 : 0;
+    }, 'The ID of the first message in the current chapter (after the last chapter end)');
+}
+
+// Extension prompt injection key
+const TIMELINE_INJECT_KEY = 'TIMELINE_MEMORY_INJECT';
+
+/**
+ * Update the timeline injection prompt
+ * Called when settings change or timeline data is updated
+ */
+export function updateTimelineInjection() {
+    // Clear injection if disabled
+    if (!settings.inject_enabled) {
+        setExtensionPrompt(TIMELINE_INJECT_KEY, '', extension_prompt_types.IN_CHAT, 0);
+        debug('Timeline injection disabled');
+        return;
+    }
+
+    const context = getContext();
+
+    // Build the injection prompt by evaluating macros
+    let prompt = settings.inject_prompt || '';
+
+    // Replace timeline-specific macros
+    const timelineContext = evaluateMacros('{{timeline}}', {});
+    const timelineResponsesContext = evaluateMacros('{{timelineResponses}}', {});
+    const lastMessageId = evaluateMacros('{{lastMessageId}}', {});
+    const firstIncludedMessageId = evaluateMacros('{{firstIncludedMessageId}}', {});
+
+    // Convert to strings if they're arrays/objects
+    const timelineStr = typeof timelineContext === 'string' ? timelineContext : JSON.stringify(timelineContext, null, 2);
+    const timelineResponsesStr = typeof timelineResponsesContext === 'string' ? timelineResponsesContext : JSON.stringify(timelineResponsesContext, null, 2);
+
+    prompt = prompt.replace(/{{timeline}}/gi, timelineStr);
+    prompt = prompt.replace(/{{timelineResponses}}/gi, timelineResponsesStr);
+    prompt = prompt.replace(/{{lastMessageId}}/gi, String(lastMessageId));
+    prompt = prompt.replace(/{{firstIncludedMessageId}}/gi, String(firstIncludedMessageId));
+
+    // Substitute standard params like {{char}}, {{user}}, etc.
+    prompt = context.substituteParams(prompt, context.name1, context.name2);
+
+    // Set the extension prompt
+    const depth = settings.inject_depth || 0;
+    const role = settings.inject_role ?? extension_prompt_roles.SYSTEM;
+
+    setExtensionPrompt(
+        TIMELINE_INJECT_KEY,
+        prompt,
+        extension_prompt_types.IN_CHAT,
+        depth,
+        false, // scan for WI
+        role
+    );
+
+    debug(`Timeline injection updated: depth=${depth}, role=${role}, length=${prompt.length}`);
 }
 
 // Load timeline data from chat metadata
@@ -516,6 +600,8 @@ export function loadTimelineData() {
 	} else {
 		timelineFillResults = [];
 	}
+	// Update injection prompt with new data
+	updateTimelineInjection();
 }
 
 // Save timeline data to chat metadata
@@ -529,6 +615,9 @@ function saveTimelineData() {
 
 	// Refresh the summaries list in the settings panel
 	refreshSummariesList();
+
+	// Update injection prompt with new data
+	updateTimelineInjection();
 }
 
 // Helper function to refresh the summaries list UI

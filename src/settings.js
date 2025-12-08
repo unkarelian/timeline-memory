@@ -4,6 +4,7 @@ import { getCharaFilename } from "../../../../utils.js";
 import { extension_name, getExtensionAssetPath } from '../index.js';
 import { resetMessageButtons } from './messages.js';
 import { debug } from "./logging.js";
+import { initTutorialUI } from './tutorial.js';
 
 export let settings;
 
@@ -295,6 +296,28 @@ NOTE: This is strictly for reference to past events. NEVER use an ID mentioned h
 	"lore_management_enabled": false,
 	"lore_management_profile": null,
 	"lore_management_prompt": "begin lore retrieval",
+
+	// Inject at depth settings
+	"inject_enabled": false,
+	"inject_depth": 0,
+	"inject_role": 0, // extension_prompt_roles.SYSTEM = 0
+	"inject_prompt": `<timeline>
+{{timeline}}
+
+# Timeline Guidelines
+Above is a timeline, with each chapter_id corresponding with a message_range and a summary. This contains only past information, not future information.
+
+## Reminder
+If the above timeline tag is empty, the timeline has no entries.
+
+## Position
+Your current message ID is {{lastMessageId}}, and the 'chapter' you are on begins on message ID {{firstIncludedMessageId}}. This is using the same scale that the timeline is on. All information contained within this range is the current chapter. Everything you see in the current chapter is past the timeline, and within this range.
+
+<retrieved_timeline_information>
+The following is information retrieved from the timeline that is directly relevant to the current scenario. Take it into close consideration.
+{{timelineResponses}}
+</retrieved_timeline_information>
+</timeline>`,
 }
 
 function toggleCheckboxSetting(event) {
@@ -593,6 +616,52 @@ async function loadSettingsUI() {
     $('#rmr_lore_management_enabled').prop('checked', settings.lore_management_enabled).on('click', toggleCheckboxSetting);
     $('#rmr_lore_management_prompt').val(settings.lore_management_prompt).on('change', handleStringValueChange);
 
+    // Inject at depth settings
+    $('#rmr_inject_enabled').prop('checked', settings.inject_enabled).on('click', async (e) => {
+        toggleCheckboxSetting(e);
+        // Update injection when toggle changes
+        const { updateTimelineInjection } = await import('./memories.js');
+        updateTimelineInjection();
+    });
+
+    // Inject role dropdown
+    const inject_role_div = $('#rmr_inject_role');
+    for (const role in extension_prompt_roles) {
+        inject_role_div.append(
+            $('<option></option>')
+                .attr('value', extension_prompt_roles[role])
+                .text(role[0] + role.substring(1).toLowerCase())
+        );
+        if (extension_prompt_roles[role] == settings.inject_role) {
+            inject_role_div.val(extension_prompt_roles[role]);
+        }
+    }
+    inject_role_div.on('input', async () => {
+        const role = Number($('#rmr_inject_role').val());
+        if (!Object.values(extension_prompt_roles).includes(role)) return;
+        settings.inject_role = role;
+        getContext().saveSettingsDebounced();
+        // Update injection when role changes
+        const { updateTimelineInjection } = await import('./memories.js');
+        updateTimelineInjection();
+    });
+
+    // Inject depth handler (with injection update)
+    $('#rmr_inject_depth').val(settings.inject_depth).on('change', async (e) => {
+        handleIntValueChange(e);
+        // Update injection when depth changes
+        const { updateTimelineInjection } = await import('./memories.js');
+        updateTimelineInjection();
+    });
+
+    // Inject prompt handler (with injection update)
+    $('#rmr_inject_prompt').val(settings.inject_prompt).on('change', async (e) => {
+        handleStringValueChange(e);
+        // Update injection when prompt changes
+        const { updateTimelineInjection } = await import('./memories.js');
+        updateTimelineInjection();
+    });
+
     // Lore management profile dropdown
     const loreManagementProfileSelect = $('#rmr_lore_management_profile');
     loreManagementProfileSelect.on('input', () => {
@@ -654,6 +723,9 @@ async function loadSettingsUI() {
 
     // Render summaries list after a short delay to ensure timeline data is loaded
     setTimeout(() => renderSummariesList(), 100);
+
+    // Initialize tutorial button
+    initTutorialUI();
 
 	debug('Settings UI loaded');
 }
