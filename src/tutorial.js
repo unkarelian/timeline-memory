@@ -201,7 +201,7 @@ The AI reads your story, identifies important lore (characters, locations, event
 3. <b>Ensure your character has a lorebook assigned</b>
 
 4. <b>(Optional) Import a Chat Completion preset</b> optimized for lore management:
-   <a href="https://raw.githubusercontent.com/unkarelian/timeline-extension-prompts/refs/heads/master/timeline-memory-config-2025-12-04(1).json" target="_blank">Download Preset</a>
+   <a href="https://raw.githubusercontent.com/unkarelian/timeline-extension-prompts/refs/heads/master/Lore%20Management.json" target="_blank">Download Preset</a>
    (Import via SillyTavern's Chat Completion settings)
 
 <b>Running Lore Management:</b>
