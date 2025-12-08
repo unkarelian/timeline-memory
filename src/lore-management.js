@@ -174,6 +174,14 @@ export async function recoverInterruptedSession() {
             await switchProfile('none');
         }
 
+        // Restore timeline injection now that lore management is done
+        try {
+            const { updateTimelineInjection } = await import('./memories.js');
+            updateTimelineInjection();
+        } catch (err) {
+            debug('Could not restore timeline injection:', err.message);
+        }
+
         log('Recovery completed successfully');
         toastr.success('Lore management session recovered', 'Timeline Memory');
         return true;
@@ -183,6 +191,15 @@ export async function recoverInterruptedSession() {
         toastr.error('Error recovering lore management session', 'Timeline Memory');
         // Clear the state anyway to prevent repeated recovery attempts
         clearStateFromMetadata();
+
+        // Still try to restore timeline injection
+        try {
+            const { updateTimelineInjection } = await import('./memories.js');
+            updateTimelineInjection();
+        } catch (injErr) {
+            debug('Could not restore timeline injection:', injErr.message);
+        }
+
         return false;
     }
 }
@@ -610,6 +627,14 @@ export async function startLoreManagementSession() {
     loreManagementState.sessionChatId = context.getCurrentChatId?.() || null;
     loreManagementState.active = true;
 
+    // Clear timeline injection while lore management is active
+    try {
+        const { updateTimelineInjection } = await import('./memories.js');
+        updateTimelineInjection();
+    } catch (err) {
+        debug('Could not update timeline injection:', err.message);
+    }
+
     log('Starting lore management session');
     log(`Saved profile: ${loreManagementState.savedProfileName || 'none'}`);
     log(`Start message index: ${loreManagementState.startMessageIndex}`);
@@ -901,6 +926,14 @@ async function cleanupLoreManagementSession() {
         loreManagementState.hiddenMessageStart = -1;
         loreManagementState.hiddenMessageEnd = -1;
         loreManagementState.sessionChatId = null;
+
+        // Restore timeline injection now that lore management is done
+        try {
+            const { updateTimelineInjection } = await import('./memories.js');
+            updateTimelineInjection();
+        } catch (err) {
+            debug('Could not restore timeline injection:', err.message);
+        }
     }
 }
 

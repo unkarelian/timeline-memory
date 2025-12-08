@@ -10,6 +10,7 @@ import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, exten
 import { oai_settings, openai_settings, chat_completion_sources, reasoning_effort_types } from "../../../../../scripts/openai.js";
 import { reasoning_templates } from "../../../../../scripts/reasoning.js";
 import { getPresetManager } from "../../../../../scripts/preset-manager.js";
+import { isLoreManagementActive } from "./lore-management.js";
 
 const runSlashCommand = getContext().executeSlashCommandsWithOptions;
 const CHAT_COMPLETION_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
@@ -186,6 +187,10 @@ function getIncludeReasoning(profileId) {
 // Store timeline data
 let timelineData = [];
 let timelineFillResults = [];
+
+// Flag to track when we're doing internal generations (arc analyzer, queries, etc.)
+// This is used to prevent timeline injection during these operations
+let isInternalGeneration = false;
 
 let commandArgs;
 
@@ -536,14 +541,42 @@ export function initTimelineMacro() {
 const TIMELINE_INJECT_KEY = 'TIMELINE_MEMORY_INJECT';
 
 /**
+ * Check if timeline injection should be active
+ * Returns false during internal generations (arc analyzer, queries) or lore management
+ * @returns {boolean}
+ */
+function shouldInjectTimeline() {
+    // Don't inject during internal extension generations
+    if (isInternalGeneration) {
+        debug('Timeline injection skipped: internal generation in progress');
+        return false;
+    }
+
+    // Don't inject during lore management mode
+    if (isLoreManagementActive()) {
+        debug('Timeline injection skipped: lore management active');
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * Update the timeline injection prompt
  * Called when settings change or timeline data is updated
  */
 export function updateTimelineInjection() {
-    // Clear injection if disabled
+    // Clear injection if disabled or if lore management is active
     if (!settings.inject_enabled) {
         setExtensionPrompt(TIMELINE_INJECT_KEY, '', extension_prompt_types.IN_CHAT, 0);
         debug('Timeline injection disabled');
+        return;
+    }
+
+    // Clear injection during lore management mode
+    if (isLoreManagementActive()) {
+        setExtensionPrompt(TIMELINE_INJECT_KEY, '', extension_prompt_types.IN_CHAT, 0);
+        debug('Timeline injection cleared: lore management active');
         return;
     }
 
@@ -574,13 +607,17 @@ export function updateTimelineInjection() {
     const depth = settings.inject_depth || 0;
     const role = settings.inject_role ?? extension_prompt_roles.SYSTEM;
 
+    // Use a filter function to prevent injection during internal generations and lore management
+    const injectionFilter = () => shouldInjectTimeline();
+
     setExtensionPrompt(
         TIMELINE_INJECT_KEY,
         prompt,
         extension_prompt_types.IN_CHAT,
         depth,
         false, // scan for WI
-        role
+        role,
+        injectionFilter
     );
 
     debug(`Timeline injection updated: depth=${depth}, role=${role}, length=${prompt.length}`);
@@ -888,44 +925,47 @@ async function genSummaryWithSlash(history, id=0) {
 		commandArgs = {};
 	}
 
-	let this_delay = delay_ms() - (Date.now() - last_gen_timestamp);
-	debug('delaying', this_delay, "out of", delay_ms());
-	if (this_delay > 0) {
-		await new Promise(resolve => setTimeout(resolve, this_delay));
-	}
-	last_gen_timestamp = Date.now();
+	// Mark as internal generation to prevent timeline injection
+	isInternalGeneration = true;
 
-	if (id > 0) {
-		infoToast("Generating summary #"+id+"....");
-	}
-	// Get timeline context for macro replacement
-	const timelineContext = evaluateMacros('{{timeline}}', {});
+	try {
+		let this_delay = delay_ms() - (Date.now() - last_gen_timestamp);
+		debug('delaying', this_delay, "out of", delay_ms());
+		if (this_delay > 0) {
+			await new Promise(resolve => setTimeout(resolve, this_delay));
+		}
+		last_gen_timestamp = Date.now();
 
-	const prompt_text = settings.memory_prompt_template.replace('{{content}}', history.trim());
+		if (id > 0) {
+			infoToast("Generating summary #"+id+"....");
+		}
+		// Get timeline context for macro replacement
+		const timelineContext = evaluateMacros('{{timeline}}', {});
 
-	// Replace {{timeline}} macro in prompt
-	let finalPrompt = prompt_text.replace(/{{timeline}}/gi, timelineContext);
+		const prompt_text = settings.memory_prompt_template.replace('{{content}}', history.trim());
 
-	// Also substitute standard params like {{char}}, {{user}}, etc.
-	const context = getContext();
-	finalPrompt = context.substituteParams(finalPrompt, context.name1, context.name2);
+		// Replace {{timeline}} macro in prompt
+		let finalPrompt = prompt_text.replace(/{{timeline}}/gi, timelineContext);
 
-	// Process system prompt with macro replacements
-	let systemPrompt = '';
-	if (settings.memory_system_prompt && settings.memory_system_prompt.trim()) {
-		systemPrompt = settings.memory_system_prompt.replace('{{content}}', history.trim());
-		// Replace {{timeline}} macro in system prompt
-		systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
 		// Also substitute standard params like {{char}}, {{user}}, etc.
-		systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
-	}
+		const context = getContext();
+		finalPrompt = context.substituteParams(finalPrompt, context.name1, context.name2);
 
-	// Determine which profile to use
-	const profileId = commandArgs?.profile || settings.profile;
+		// Process system prompt with macro replacements
+		let systemPrompt = '';
+		if (settings.memory_system_prompt && settings.memory_system_prompt.trim()) {
+			systemPrompt = settings.memory_system_prompt.replace('{{content}}', history.trim());
+			// Replace {{timeline}} macro in system prompt
+			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
+			// Also substitute standard params like {{char}}, {{user}}, etc.
+			systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+		}
 
-	// Use ConnectionManagerRequestService if a profile is specified
-	if (profileId && ConnectionManagerRequestService) {
-		try {
+		// Determine which profile to use
+		const profileId = commandArgs?.profile || settings.profile;
+
+		// Use ConnectionManagerRequestService if a profile is specified
+		if (profileId && ConnectionManagerRequestService) {
 			debug(`Using ConnectionManagerRequestService with profile: ${profileId}`);
 
 			// Build messages array for the request
@@ -976,15 +1016,14 @@ async function genSummaryWithSlash(history, id=0) {
 
 			debug('Successfully used ConnectionManagerRequestService for summary');
 			return final_content;
-		} catch (error) {
-			errorToast('Error using connection profile for summary');
-			debug('ConnectionManagerRequestService error:', error);
-			throw new Error(`Failed to generate summary: ${error.message}`);
 		}
-	}
 
-	// No profile specified and no fallback available
-	throw new Error('No connection profile specified for summary generation');
+		// No profile specified and no fallback available
+		throw new Error('No connection profile specified for summary generation');
+	} finally {
+		// Always reset the flag when done
+		isInternalGeneration = false;
+	}
 }
 
 async function generateMemory(message) {
@@ -1203,6 +1242,9 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 		throw new Error('Timeline fill profile is not configured. Please select one in the settings.');
 	}
 
+	// Mark as internal generation to prevent timeline injection
+	isInternalGeneration = true;
+
 	const context = getContext();
 	const timelineMacroResult = evaluateMacros('{{timeline}}', {}) ?? [];
 	const historyMacroResult = evaluateMacros('{{chapterHistory}}', {}) ?? [];
@@ -1355,6 +1397,9 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 	} catch (error) {
 		debug('Timeline fill failed:', error);
 		throw error;
+	} finally {
+		// Always reset the flag when done
+		isInternalGeneration = false;
 	}
 }
 
@@ -1366,217 +1411,64 @@ export async function queryChapter(chapterNumber, query) {
 		commandArgs = {};
 	}
 
-	const chapterHistory = await getChapterHistory(chapterNumber);
-	if (!chapterHistory) {
-		errorToast(`Chapter ${chapterNumber} not found`);
-		return '';
-	}
+	// Mark as internal generation to prevent timeline injection
+	isInternalGeneration = true;
 
-	const chapter = timelineData[chapterNumber - 1];
-	debug(`Querying chapter ${chapterNumber}:`, chapter);
-	debug(`Chapter history length: ${chapterHistory.length} messages`);
-
-	const timelineContext = evaluateMacros('{{timeline}}', {});
-
-	// Format the chapter history - this is ALL messages from the chapter
-	const chapterContext = chapterHistory.map((it) => `${it.name}: ${it.mes}`).join("\n\n");
-
-	debug(`Chapter context length: ${chapterContext.length} characters`);
-	debug(`Timeline context length: ${timelineContext.length} characters`);
-	debug(`Query: ${query}`);
-
-	// Build the prompt - for now, use simple string replacement to ensure it works
-	let prompt = settings.chapter_query_prompt_template;
-
-	// Replace macros in order - most specific first
-	prompt = prompt.replace(/{{timeline}}/gi, timelineContext);
-	prompt = prompt.replace(/{{chapter}}/gi, chapterContext);
-	// Also replace {{chapterSummary}} with the actual chapter summary
-	prompt = prompt.replace(/{{chapterSummary}}/gi, chapter.summary);
-	prompt = prompt.replace(/{{query}}/gi, query);
-
-	// Then use substituteParams for any remaining standard macros like {{char}}, {{user}}, etc.
-	const context = getContext();
-	prompt = context.substituteParams(prompt, context.name1, context.name2);
-
-	// Process system prompt with the same macro replacements
-	let systemPrompt = '';
-	if (settings.chapter_query_system_prompt && settings.chapter_query_system_prompt.trim()) {
-		systemPrompt = settings.chapter_query_system_prompt;
-		// Replace the same macros in system prompt
-		systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
-		systemPrompt = systemPrompt.replace(/{{chapter}}/gi, chapterContext);
-		// Also replace {{chapterSummary}} with the actual chapter summary
-		systemPrompt = systemPrompt.replace(/{{chapterSummary}}/gi, chapter.summary);
-		systemPrompt = systemPrompt.replace(/{{query}}/gi, query);
-		// Also substitute standard params
-		systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
-	}
-
-	debug(`Final prompt length: ${prompt.length} characters`);
-	debug(`System prompt length: ${systemPrompt.length} characters`);
-
-	infoToast(`Querying chapter ${chapterNumber}...`);
-
-	// Use ConnectionManagerRequestService if a profile is specified
-	if (settings.query_profile && ConnectionManagerRequestService) {
-		try {
-			debug(`Using ConnectionManagerRequestService with profile: ${settings.query_profile}`);
-
-			// Build messages array for the request
-			const messages = [];
-			if (systemPrompt) {
-				messages.push({ role: 'system', content: systemPrompt });
-			}
-			messages.push({ role: 'user', content: prompt });
-
-			// Get max tokens for the profile
-			const maxTokens = await getMaxTokensForProfile(settings.query_profile);
-			debug(`Using max tokens: ${maxTokens} for profile: ${settings.query_profile}`);
-
-			// Build override payload for special cases like OpenAI o1 models
-			const overridePayload = buildOverridePayload(settings.query_profile, maxTokens);
-
-			// Get the reasoning effort value for this profile
-			const reasoningEffort = getReasoningEffort(settings.query_profile);
-
-			// Add reasoning_effort to override payload if it exists
-			if (reasoningEffort !== undefined) {
-				overridePayload.reasoning_effort = reasoningEffort;
-			}
-			const includeReasoning = getIncludeReasoning(settings.query_profile);
-			if (includeReasoning !== undefined) {
-				overridePayload.include_reasoning = includeReasoning;
-			}
-
-			// Use ConnectionManagerRequestService to send the request
-			const result = await ConnectionManagerRequestService.sendRequest(
-				settings.query_profile,  // profileId
-				messages,                // prompt (as messages array)
-				maxTokens,               // maxTokens
-				{                        // custom options
-					includePreset: true, // Include generation preset from profile
-					stream: false        // Don't stream the response
-				},
-				overridePayload          // overridePayload with correct parameter names
-			);
-
-			// Extract content from response - parse reasoning if needed
-			const content = result?.content || result || '';
-            const parsed_reasoning = await reasoningParser(content, settings.query_profile);
-          //  console.log('parsed_reasoning', parsed_reasoning.content);
-		//	const parsed_result = getContext().parseReasoningFromString(content);
-           // console.log('parsed_result', parsed_result);
-			const final_content = parsed_reasoning ? parsed_reasoning.content : content;
-            console.log('final_content', final_content);
-			debug('Successfully used ConnectionManagerRequestService for query');
-			return final_content;
-		} catch (error) {
-			errorToast('Error using connection profile for query');
-			debug('ConnectionManagerRequestService error:', error);
-			throw new Error(`Failed to generate query response: ${error.message}`);
-		}
-	}
-
-	// No profile specified and no fallback available
-	throw new Error('No connection profile specified for query');
-}
-
-// Query multiple chapters with a specific question
-export async function queryChapters(startChapter, endChapter, query) {
-	// Initialize commandArgs if not set
-	if (!commandArgs) {
-		commandArgs = {};
-	}
-
-	// Validate chapter range
-	if (startChapter < 1 || startChapter > timelineData.length) {
-		errorToast(`Start chapter ${startChapter} is out of range (1-${timelineData.length})`);
-		return '';
-	}
-	if (endChapter < 1 || endChapter > timelineData.length) {
-		errorToast(`End chapter ${endChapter} is out of range (1-${timelineData.length})`);
-		return '';
-	}
-	if (startChapter > endChapter) {
-		errorToast(`Start chapter ${startChapter} must be before or equal to end chapter ${endChapter}`);
-		return '';
-	}
-
-	debug(`Querying chapters ${startChapter} to ${endChapter}`);
-
-	// Collect all chapter histories and summaries
-	const chaptersData = [];
-	const chapterSummaries = [];
-	
-	for (let i = startChapter; i <= endChapter; i++) {
-		const chapterHistory = await getChapterHistory(i);
+	try {
+		const chapterHistory = await getChapterHistory(chapterNumber);
 		if (!chapterHistory) {
-			errorToast(`Chapter ${i} not found`);
+			errorToast(`Chapter ${chapterNumber} not found`);
 			return '';
 		}
-		
-		const chapter = timelineData[i - 1];
-		chaptersData.push({
-			number: i,
-			history: chapterHistory,
-			summary: chapter.summary
-		});
-		chapterSummaries.push(`Chapter ${i} Summary: ${chapter.summary}`);
-	}
 
-	const timelineContext = evaluateMacros('{{timeline}}', {});
+		const chapter = timelineData[chapterNumber - 1];
+		debug(`Querying chapter ${chapterNumber}:`, chapter);
+		debug(`Chapter history length: ${chapterHistory.length} messages`);
 
-	// Format all chapters with headers
-	const allChaptersContext = chaptersData.map(chapterData => {
-		const chapterContent = chapterData.history.map((it) => `${it.name}: ${it.mes}`).join("\n\n");
-		return `Chapter: ${chapterData.number}\n${chapterContent}`;
-	}).join("\n\n");
+		const timelineContext = evaluateMacros('{{timeline}}', {});
 
-	// Format all summaries with headers
-	const allSummariesContext = chapterSummaries.join("\n\n");
+		// Format the chapter history - this is ALL messages from the chapter
+		const chapterContext = chapterHistory.map((it) => `${it.name}: ${it.mes}`).join("\n\n");
 
-	debug(`Total chapters context length: ${allChaptersContext.length} characters`);
-	debug(`Timeline context length: ${timelineContext.length} characters`);
-	debug(`Query: ${query}`);
+		debug(`Chapter context length: ${chapterContext.length} characters`);
+		debug(`Timeline context length: ${timelineContext.length} characters`);
+		debug(`Query: ${query}`);
 
-	// Build the prompt - use simple string replacement to ensure it works
-	let prompt = settings.chapter_query_prompt_template;
+		// Build the prompt - for now, use simple string replacement to ensure it works
+		let prompt = settings.chapter_query_prompt_template;
 
-	// Replace macros in order - most specific first
-	prompt = prompt.replace(/{{timeline}}/gi, timelineContext);
-	prompt = prompt.replace(/{{chapter}}/gi, allChaptersContext);
-	// Replace {{chapterSummary}} with all chapter summaries
-	prompt = prompt.replace(/{{chapterSummary}}/gi, allSummariesContext);
-	prompt = prompt.replace(/{{query}}/gi, query);
+		// Replace macros in order - most specific first
+		prompt = prompt.replace(/{{timeline}}/gi, timelineContext);
+		prompt = prompt.replace(/{{chapter}}/gi, chapterContext);
+		// Also replace {{chapterSummary}} with the actual chapter summary
+		prompt = prompt.replace(/{{chapterSummary}}/gi, chapter.summary);
+		prompt = prompt.replace(/{{query}}/gi, query);
 
-	// Then use substituteParams for any remaining standard macros like {{char}}, {{user}}, etc.
-	const context = getContext();
-	prompt = context.substituteParams(prompt, context.name1, context.name2);
+		// Then use substituteParams for any remaining standard macros like {{char}}, {{user}}, etc.
+		const context = getContext();
+		prompt = context.substituteParams(prompt, context.name1, context.name2);
 
-	// Process system prompt with the same macro replacements
-	let systemPrompt = '';
-	if (settings.chapter_query_system_prompt && settings.chapter_query_system_prompt.trim()) {
-		systemPrompt = settings.chapter_query_system_prompt;
-		// Replace the same macros in system prompt
-		systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
-		systemPrompt = systemPrompt.replace(/{{chapter}}/gi, allChaptersContext);
-		// Replace {{chapterSummary}} with all chapter summaries
-		systemPrompt = systemPrompt.replace(/{{chapterSummary}}/gi, allSummariesContext);
-		systemPrompt = systemPrompt.replace(/{{query}}/gi, query);
-		// Also substitute standard params
-		systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
-	}
+		// Process system prompt with the same macro replacements
+		let systemPrompt = '';
+		if (settings.chapter_query_system_prompt && settings.chapter_query_system_prompt.trim()) {
+			systemPrompt = settings.chapter_query_system_prompt;
+			// Replace the same macros in system prompt
+			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
+			systemPrompt = systemPrompt.replace(/{{chapter}}/gi, chapterContext);
+			// Also replace {{chapterSummary}} with the actual chapter summary
+			systemPrompt = systemPrompt.replace(/{{chapterSummary}}/gi, chapter.summary);
+			systemPrompt = systemPrompt.replace(/{{query}}/gi, query);
+			// Also substitute standard params
+			systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+		}
 
-	debug(`Final prompt length: ${prompt.length} characters`);
-	debug(`System prompt length: ${systemPrompt.length} characters`);
+		debug(`Final prompt length: ${prompt.length} characters`);
+		debug(`System prompt length: ${systemPrompt.length} characters`);
 
-	const chapterRange = startChapter === endChapter ? `chapter ${startChapter}` : `chapters ${startChapter}-${endChapter}`;
-	infoToast(`Querying ${chapterRange}...`);
+		infoToast(`Querying chapter ${chapterNumber}...`);
 
-	// Use ConnectionManagerRequestService if a profile is specified
-	if (settings.query_profile && ConnectionManagerRequestService) {
-		try {
+		// Use ConnectionManagerRequestService if a profile is specified
+		if (settings.query_profile && ConnectionManagerRequestService) {
 			debug(`Using ConnectionManagerRequestService with profile: ${settings.query_profile}`);
 
 			// Build messages array for the request
@@ -1624,15 +1516,177 @@ export async function queryChapters(startChapter, endChapter, query) {
 			console.log('final_content', final_content);
 			debug('Successfully used ConnectionManagerRequestService for query');
 			return final_content;
-		} catch (error) {
-			errorToast('Error using connection profile for query');
-			debug('ConnectionManagerRequestService error:', error);
-			throw new Error(`Failed to generate query response: ${error.message}`);
 		}
+
+		// No profile specified and no fallback available
+		throw new Error('No connection profile specified for query');
+	} catch (error) {
+		errorToast('Error using connection profile for query');
+		debug('ConnectionManagerRequestService error:', error);
+		throw new Error(`Failed to generate query response: ${error.message}`);
+	} finally {
+		// Always reset the flag when done
+		isInternalGeneration = false;
+	}
+}
+
+// Query multiple chapters with a specific question
+export async function queryChapters(startChapter, endChapter, query) {
+	// Initialize commandArgs if not set
+	if (!commandArgs) {
+		commandArgs = {};
 	}
 
-	// No profile specified and no fallback available
-	throw new Error('No connection profile specified for query');
+	// Mark as internal generation to prevent timeline injection
+	isInternalGeneration = true;
+
+	try {
+		// Validate chapter range
+		if (startChapter < 1 || startChapter > timelineData.length) {
+			errorToast(`Start chapter ${startChapter} is out of range (1-${timelineData.length})`);
+			return '';
+		}
+		if (endChapter < 1 || endChapter > timelineData.length) {
+			errorToast(`End chapter ${endChapter} is out of range (1-${timelineData.length})`);
+			return '';
+		}
+		if (startChapter > endChapter) {
+			errorToast(`Start chapter ${startChapter} must be before or equal to end chapter ${endChapter}`);
+			return '';
+		}
+
+		debug(`Querying chapters ${startChapter} to ${endChapter}`);
+
+		// Collect all chapter histories and summaries
+		const chaptersData = [];
+		const chapterSummaries = [];
+
+		for (let i = startChapter; i <= endChapter; i++) {
+			const chapterHistory = await getChapterHistory(i);
+			if (!chapterHistory) {
+				errorToast(`Chapter ${i} not found`);
+				return '';
+			}
+
+			const chapter = timelineData[i - 1];
+			chaptersData.push({
+				number: i,
+				history: chapterHistory,
+				summary: chapter.summary
+			});
+			chapterSummaries.push(`Chapter ${i} Summary: ${chapter.summary}`);
+		}
+
+		const timelineContext = evaluateMacros('{{timeline}}', {});
+
+		// Format all chapters with headers
+		const allChaptersContext = chaptersData.map(chapterData => {
+			const chapterContent = chapterData.history.map((it) => `${it.name}: ${it.mes}`).join("\n\n");
+			return `Chapter: ${chapterData.number}\n${chapterContent}`;
+		}).join("\n\n");
+
+		// Format all summaries with headers
+		const allSummariesContext = chapterSummaries.join("\n\n");
+
+		debug(`Total chapters context length: ${allChaptersContext.length} characters`);
+		debug(`Timeline context length: ${timelineContext.length} characters`);
+		debug(`Query: ${query}`);
+
+		// Build the prompt - use simple string replacement to ensure it works
+		let prompt = settings.chapter_query_prompt_template;
+
+		// Replace macros in order - most specific first
+		prompt = prompt.replace(/{{timeline}}/gi, timelineContext);
+		prompt = prompt.replace(/{{chapter}}/gi, allChaptersContext);
+		// Replace {{chapterSummary}} with all chapter summaries
+		prompt = prompt.replace(/{{chapterSummary}}/gi, allSummariesContext);
+		prompt = prompt.replace(/{{query}}/gi, query);
+
+		// Then use substituteParams for any remaining standard macros like {{char}}, {{user}}, etc.
+		const context = getContext();
+		prompt = context.substituteParams(prompt, context.name1, context.name2);
+
+		// Process system prompt with the same macro replacements
+		let systemPrompt = '';
+		if (settings.chapter_query_system_prompt && settings.chapter_query_system_prompt.trim()) {
+			systemPrompt = settings.chapter_query_system_prompt;
+			// Replace the same macros in system prompt
+			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
+			systemPrompt = systemPrompt.replace(/{{chapter}}/gi, allChaptersContext);
+			// Replace {{chapterSummary}} with all chapter summaries
+			systemPrompt = systemPrompt.replace(/{{chapterSummary}}/gi, allSummariesContext);
+			systemPrompt = systemPrompt.replace(/{{query}}/gi, query);
+			// Also substitute standard params
+			systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+		}
+
+		debug(`Final prompt length: ${prompt.length} characters`);
+		debug(`System prompt length: ${systemPrompt.length} characters`);
+
+		const chapterRange = startChapter === endChapter ? `chapter ${startChapter}` : `chapters ${startChapter}-${endChapter}`;
+		infoToast(`Querying ${chapterRange}...`);
+
+		// Use ConnectionManagerRequestService if a profile is specified
+		if (settings.query_profile && ConnectionManagerRequestService) {
+			debug(`Using ConnectionManagerRequestService with profile: ${settings.query_profile}`);
+
+			// Build messages array for the request
+			const messages = [];
+			if (systemPrompt) {
+				messages.push({ role: 'system', content: systemPrompt });
+			}
+			messages.push({ role: 'user', content: prompt });
+
+			// Get max tokens for the profile
+			const maxTokens = await getMaxTokensForProfile(settings.query_profile);
+			debug(`Using max tokens: ${maxTokens} for profile: ${settings.query_profile}`);
+
+			// Build override payload for special cases like OpenAI o1 models
+			const overridePayload = buildOverridePayload(settings.query_profile, maxTokens);
+
+			// Get the reasoning effort value for this profile
+			const reasoningEffort = getReasoningEffort(settings.query_profile);
+
+			// Add reasoning_effort to override payload if it exists
+			if (reasoningEffort !== undefined) {
+				overridePayload.reasoning_effort = reasoningEffort;
+			}
+			const includeReasoning = getIncludeReasoning(settings.query_profile);
+			if (includeReasoning !== undefined) {
+				overridePayload.include_reasoning = includeReasoning;
+			}
+
+			// Use ConnectionManagerRequestService to send the request
+			const result = await ConnectionManagerRequestService.sendRequest(
+				settings.query_profile,  // profileId
+				messages,                // prompt (as messages array)
+				maxTokens,               // maxTokens
+				{                        // custom options
+					includePreset: true, // Include generation preset from profile
+					stream: false        // Don't stream the response
+				},
+				overridePayload          // overridePayload with correct parameter names
+			);
+
+			// Extract content from response - parse reasoning if needed
+			const content = result?.content || result || '';
+			const parsed_reasoning = await reasoningParser(content, settings.query_profile);
+			const final_content = parsed_reasoning ? parsed_reasoning.content : content;
+			console.log('final_content', final_content);
+			debug('Successfully used ConnectionManagerRequestService for query');
+			return final_content;
+		}
+
+		// No profile specified and no fallback available
+		throw new Error('No connection profile specified for query');
+	} catch (error) {
+		errorToast('Error using connection profile for query');
+		debug('ConnectionManagerRequestService error:', error);
+		throw new Error(`Failed to generate query response: ${error.message}`);
+	} finally {
+		// Always reset the flag when done
+		isInternalGeneration = false;
+	}
 }
 
 async function summarizeHistoryEntries(message_history, { targetMessageId, hideAfter = false } = {}) {
@@ -2061,6 +2115,9 @@ async function showArcPopup(arcs) {
 }
 
 export async function analyzeArcs(profileOverride = null) {
+    // Mark as internal generation to prevent timeline injection
+    isInternalGeneration = true;
+
     try {
         const context = getContext();
         const profileId = profileOverride || settings.arc_profile;
@@ -2122,5 +2179,8 @@ export async function analyzeArcs(profileOverride = null) {
     } catch (err) {
         console.error('Arc Analyzer failure:', err);
         toastr.error('Arc analysis failed', 'Timeline Memory');
+    } finally {
+        // Always reset the flag when done
+        isInternalGeneration = false;
     }
 }
