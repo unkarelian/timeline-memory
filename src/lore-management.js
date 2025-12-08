@@ -6,7 +6,7 @@
  */
 
 import { extension_settings, getContext } from "../../../../extensions.js";
-import { saveChatConditional, reloadCurrentChat, characters, this_chid, eventSource, event_types, stopGeneration } from "../../../../../script.js";
+import { saveChatConditional, reloadCurrentChat, characters, this_chid, eventSource, event_types, stopGeneration, isSwipingAllowed } from "../../../../../script.js";
 import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { world_names, loadWorldInfo, createWorldInfoEntry, deleteWorldInfoEntry, saveWorldInfo } from "../../../../world-info.js";
 import { settings } from "./settings.js";
@@ -90,7 +90,10 @@ const loreManagementState = {
     hiddenMessageStart: -1,  // First message index that was hidden
     hiddenMessageEnd: -1,    // Last message index that was hidden
     sessionChatId: null,     // Chat ID when session started (to detect actual chat switches)
+    retryCount: 0,           // Counter to prevent infinite retry loops on errors
 };
+
+const MAX_RETRIES = 5;  // Maximum number of consecutive retries before aborting
 
 const LORE_MANAGEMENT_METADATA_KEY = 'lore_management_session';
 
@@ -405,6 +408,9 @@ function endLoreManagementTool() {
     loreManagementState.endRequested = true;
     log('End lore management requested via tool');
 
+    // Stop the generation monitor FIRST to prevent spurious swipes from generation_ended events
+    stopGenerationMonitor();
+
     // Stop any further generation immediately
     stopGeneration();
 
@@ -596,6 +602,7 @@ export async function startLoreManagementSession() {
     loreManagementState.savedProfileName = getProfileNameById(loreManagementState.savedProfileId);
     loreManagementState.startMessageIndex = context.chat.length;
     loreManagementState.endRequested = false;
+    loreManagementState.retryCount = 0;
     loreManagementState.hiddenMessageStart = -1;
     loreManagementState.hiddenMessageEnd = -1;
     loreManagementState.sessionChatId = context.getCurrentChatId?.() || null;
@@ -647,19 +654,79 @@ export async function startLoreManagementSession() {
 }
 
 /**
- * Handle generation end - re-trigger since generation_ended only fires when no tool call continues
+ * Wait until isSwipingAllowed() returns true
+ * @param {number} maxWait - Maximum time to wait in ms
+ * @param {number} interval - Polling interval in ms
+ * @returns {Promise<boolean>} True if swiping is allowed, false if timed out
  */
-async function onGenerationEnded() {
+async function waitForSwipeReady(maxWait = 5000, interval = 100) {
+    const startTime = Date.now();
+    while (!isSwipingAllowed()) {
+        if (Date.now() - startTime > maxWait) {
+            return false;
+        }
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+    return true;
+}
+
+/**
+ * Handle generation end - retry since generation_ended only fires when no tool call continues
+ */
+function onGenerationEnded() {
     if (!loreManagementState.active || loreManagementState.endRequested) {
         return;
     }
 
-    log('Generation ended without tool call, re-triggering...');
-    try {
-        await executeSlashCommandsWithOptions('/trigger');
-    } catch (err) {
-        error('Error re-triggering generation:', err);
+    // Increment retry count and check limit
+    loreManagementState.retryCount++;
+    if (loreManagementState.retryCount > MAX_RETRIES) {
+        error(`Max retries (${MAX_RETRIES}) exceeded, aborting lore management session`);
+        toastr.error('Lore management aborted: AI failed to make valid tool calls', 'Timeline Memory');
+        abortLoreManagementSession();
+        return;
     }
+
+    log(`Generation ended without tool call (retry ${loreManagementState.retryCount}/${MAX_RETRIES}), attempting retry...`);
+
+    // Use setTimeout to not block the event handler
+    setTimeout(async () => {
+        if (!loreManagementState.active || loreManagementState.endRequested) {
+            return;
+        }
+
+        // Wait for swiping to be allowed (also indicates generation is done)
+        const ready = await waitForSwipeReady();
+        if (!ready) {
+            error('Timed out waiting for generation to complete');
+            return;
+        }
+
+        if (!loreManagementState.active || loreManagementState.endRequested) {
+            return;
+        }
+
+        // Try to swipe first (regenerate the last message)
+        log('Attempting swipe...');
+        try {
+            await executeSlashCommandsWithOptions('/swipes-swipe');
+            log('Swipe completed');
+        } catch (swipeErr) {
+            // Swipe failed (likely tool result message) - fall back to triggering new generation
+            log('Swipe failed, triggering new generation instead:', swipeErr.message);
+
+            if (!loreManagementState.active || loreManagementState.endRequested) {
+                return;
+            }
+
+            try {
+                await executeSlashCommandsWithOptions('/trigger');
+                log('New generation triggered');
+            } catch (triggerErr) {
+                error('Error triggering new generation:', triggerErr);
+            }
+        }
+    }, 0);
 }
 
 /**
@@ -709,6 +776,9 @@ async function cleanupLoreManagementSession() {
     if (!loreManagementState.active) {
         return;
     }
+
+    // Set active to false immediately to prevent any async callbacks (like swipe retries) from proceeding
+    loreManagementState.active = false;
 
     log('Cleaning up lore management session');
 
@@ -766,6 +836,7 @@ async function cleanupLoreManagementSession() {
         loreManagementState.savedProfileName = null;
         loreManagementState.startMessageIndex = 0;
         loreManagementState.endRequested = false;
+        loreManagementState.retryCount = 0;
         loreManagementState.hiddenMessageStart = -1;
         loreManagementState.hiddenMessageEnd = -1;
         loreManagementState.sessionChatId = null;
