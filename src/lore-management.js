@@ -408,6 +408,9 @@ function endLoreManagementTool() {
     // Stop any further generation immediately
     stopGeneration();
 
+    // Directly initiate cleanup (async, don't await)
+    cleanupLoreManagementSession();
+
     return 'Lore management session ending. All lorebook changes have been saved.';
 }
 
@@ -515,7 +518,7 @@ export function registerLoreTools() {
         name: 'end_lore_management',
         displayName: 'End Lore Management',
         description: 'Signal that you are done managing lorebooks. Call this when you have finished all lorebook edits.',
-        stealth: false,
+        stealth: true,
         parameters: {
             type: 'object',
             properties: {},
@@ -633,8 +636,8 @@ export async function startLoreManagementSession() {
 
         log('Added lore management user message');
 
-        // Run the lore management loop
-        await runLoreManagementLoop();
+        // Trigger initial generation - SillyTavern handles tool flow automatically
+        await triggerLoreManagement();
 
     } catch (err) {
         error('Lore management session failed:', err);
@@ -644,44 +647,59 @@ export async function startLoreManagementSession() {
 }
 
 /**
- * Run the lore management generation loop
- * Uses end_lore_management tool call to detect when the AI is done
+ * Handle generation end - re-trigger since generation_ended only fires when no tool call continues
  */
-async function runLoreManagementLoop() {
-    log('Starting lore management loop');
-
-    while (loreManagementState.active && !loreManagementState.endRequested) {
-        try {
-            log('Triggering generation...');
-
-            // Trigger generation and wait for it to complete
-            await executeSlashCommandsWithOptions('/trigger await=true');
-
-            log('Generation completed, checking if end was requested...');
-            log(`End requested: ${loreManagementState.endRequested}`);
-
-            // Check if the end_lore_management tool was called
-            if (loreManagementState.endRequested) {
-                log('End lore management tool was called, ending loop');
-                break;
-            }
-
-            // Small delay before next iteration
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-        } catch (err) {
-            error('Error in lore management loop:', err);
-            // Don't break on error - the generation might have been cancelled but we can retry
-            // Unless end was requested
-            if (loreManagementState.endRequested) {
-                break;
-            }
-            // Wait a bit before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+async function onGenerationEnded() {
+    if (!loreManagementState.active || loreManagementState.endRequested) {
+        return;
     }
 
-    await cleanupLoreManagementSession();
+    log('Generation ended without tool call, re-triggering...');
+    try {
+        await executeSlashCommandsWithOptions('/trigger');
+    } catch (err) {
+        error('Error re-triggering generation:', err);
+    }
+}
+
+/**
+ * Start monitoring for generation end (only fires when no tool call auto-continues)
+ */
+function startGenerationMonitor() {
+    log('Starting generation monitor');
+    eventSource.on(event_types.GENERATION_ENDED, onGenerationEnded);
+}
+
+/**
+ * Stop monitoring generation events
+ */
+function stopGenerationMonitor() {
+    log('Stopping generation monitor');
+    eventSource.removeListener(event_types.GENERATION_ENDED, onGenerationEnded);
+}
+
+/**
+ * Trigger the initial lore management generation
+ * SillyTavern's tool calling flow handles subsequent generations automatically.
+ * The generation monitor handles re-triggering if AI doesn't make a tool call.
+ */
+async function triggerLoreManagement() {
+    log('Triggering initial lore management generation');
+
+    // Start monitoring for generation completions
+    startGenerationMonitor();
+
+    try {
+        // Trigger generation - SillyTavern will auto-continue after tool calls
+        // The end_lore_management tool (stealth) will handle cleanup when done
+        await executeSlashCommandsWithOptions('/trigger');
+        log('Initial generation triggered');
+    } catch (err) {
+        error('Error triggering lore management:', err);
+        stopGenerationMonitor();
+        // If initial trigger fails, clean up
+        await cleanupLoreManagementSession();
+    }
 }
 
 /**
@@ -698,7 +716,8 @@ async function cleanupLoreManagementSession() {
     const chat = context.chat;
 
     try {
-        // Unregister tools first
+        // Stop monitoring and unregister tools first
+        stopGenerationMonitor();
         unregisterLoreTools();
 
         // Delete all messages from the session
@@ -763,5 +782,6 @@ export async function abortLoreManagementSession() {
 
     log('Aborting lore management session');
     loreManagementState.endRequested = true;
-    // The loop will detect this and clean up
+    stopGeneration();
+    await cleanupLoreManagementSession();
 }
