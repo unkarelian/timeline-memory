@@ -95,7 +95,7 @@ function initQuickReplyButtons() {
 		retrieveAndSwipeBtn.removeClass('fa-rotate').addClass('fa-gear fa-spin');
 		showRetrievalProgress('analysis');
 		try {
-			await getContext().executeSlashCommandsWithOptions('/hide {{lastMessageId}} | /timeline-fill await=true | /unhide {{lastMessageId}} |');
+			await getContext().executeSlashCommandsWithOptions('/hide {{lastMessageId}} | /timeline-fill await=true | /unhide {{lastMessageId}} | /swipes-swipe |');
 		} catch (err) {
 			console.error('Timeline Memory: Retrieve and Swipe failed:', err);
 			toastr.error('Retrieve and Swipe failed: ' + err.message, 'Timeline Memory');

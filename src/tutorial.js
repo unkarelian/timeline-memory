@@ -138,10 +138,10 @@ Look for these buttons in the bottom bar (near the send button):
 • <b>💬 Chat bubble</b> (comment-dots) - <i>Retrieve and Send</i>
   Retrieves timeline context, then sends your message
 
-• <b>🔄 Recycle wheel</b> (rotate) - <i>Retrieve and Swipe</i>
+• <b>🔄 Recycle wheel</b> (rotate) - <i>Retrieve to Swipe</i>
   Retrieves timeline context, then regenerates the last response
 
-These buttons replace the need for Quick Reply macros!
+The results persist even after the message is done generating! Swipes automatically keep the retrieved information, even if you don't use 'Retrieve to Swipe'.
 
 <i>With Inject at Depth enabled, retrieved context appears automatically.</i>`,
         highlight: '#rmr-retrieve-send'
