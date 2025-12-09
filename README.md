@@ -1,157 +1,281 @@
-# timeline-memory
+# Timeline Memory
 
-A reworked SillyTavern extension for creating a timeline of summarized chapters from your chat sessions.
+A SillyTavern extension for creating a timeline of summarized chapters from your chat sessions, with intelligent context retrieval and lorebook management capabilities.
 
 ## Features
 
-- **Chapter Timeline**: Summarize chapters and track them in a linear timeline accessible via the `{{timeline}}` macro
-- **AI Chapter Queries**: Enable function/tool calls to let the AI query specific chapters with questions
-- **Customizable Prompts**: Configure prompts for scene summarization and queries
-- **Connection Profile Support**: Select specific connection profiles for summarization and queries
-- **Arc Analyzer**: Analyze the chat to propose realistic arc endpoints and turn them into chapters via a popup
-- **Chat Cleanup Tools**: Built-in slash commands to remove reasoning traces and tool call artifacts
+- **Chapter Timeline**: Summarize chapters and track them in a linear timeline accessible via macros
+- **Arc Analyzer**: AI-powered detection of natural chapter endpoints in your chat
+- **Timeline Fill**: Smart context retrieval that queries relevant chapters based on current conversation
+- **Inject at Depth**: Automatic timeline injection into AI context without prompt editing
+- **Lore Management Mode**: Autonomous AI-driven lorebook editing based on story events
+- **Customizable Presets**: Save and share configurations for all workflow types
+- **AI Tool Calls**: Enable the AI to query specific chapters directly via function calls
+- **Chat Cleanup Tools**: Built-in commands to remove reasoning traces and tool call artifacts
 
 ## Installation
 
-Install like any other SillyTavern extension, with the Github link: `https://github.com/unkarelian/timeline-memory`
-
-## Usage
-
-### Chapter Management
-
-Click the "End Chapter" button (⏹️) on any message to:
-- Summarize all messages from the last chapter marker (or chat start) to that message
-- Add the summary to the timeline with message IDs for reference
-- Optionally hide the summarized messages
-
-Chapter end-point messages can be unset by clicking the checkmark button. This will:
-- Remove the chapter from the timeline
-- Unhide any messages that were hidden when the chapter was summarized
-- Remove the chapter end marker from the message
-
-### Macros
-
-The extension provides the following macros:
-
-- `{{timeline}}` - Outputs a JSON-formatted timeline of all chapter summaries in the current chat. The timeline includes structured information with chapter IDs, message ranges, and summaries.
-- `{{chapterSummary}}` - A placeholder macro that gets replaced with the actual chapter summary during chapter queries. This is automatically substituted when using the `/timeline-query` command or the AI function tool.
-- `{{chapterHistory}}` - The entire chat history rendered as `Name: Message` lines. Used by Arc Analyzer by default.
-
-### AI Chapter Queries
-
-When "Enable Tool/Function Calls" is checked in settings, the AI can query specific chapters using the `query_timeline_chapter` function. This allows the AI to:
-- Access the full content of any summarized chapter
-- Answer questions about specific events
-- Reference past conversations accurately
-
-### Manual Chapter Queries
-
-You can also manually query chapters using the slash command:
+Install like any other SillyTavern extension using the GitHub link:
 ```
-/timeline-query chapter=2 What did Alice say about the treasure map?
+https://github.com/unkarelian/timeline-memory
 ```
-
-## Configuration
-
-### General Settings
-- **Enable Tool/Function Calls**: Allow the AI to query chapters via function calls
-
-### API Connection Profiles
-- **Summarization Profile**: Connection profile to use for chapter summarization
-- **Chapter Query Profile**: Connection profile to use for chapter queries
-- **Max Requests per Minute**: Rate limiting to avoid API throttling
-
-### Prompts
-- **Chapter Summary Prompt**: Customize the prompt used for summarizing chapters
-  - Default uses `{{content}}` placeholder for the chapter content
-- **Chapter Query Prompt**: Customize the prompt used for querying chapters
-  - Uses `{{timeline}}`, `{{chapter}}`, and `{{query}}` placeholders
- - **Arc Analyzer Prompt**: Customize the prompt used to detect arcs in the chat
-   - Uses `{{chapterHistory}}`
-
-### Chapter Settings
-- **Hide Summarized Messages**: Automatically hide messages after summarizing
-- **Add chunk summaries**: Include individual chunk summaries as comments (for long chapters)
-
-## Slash Commands
-
-### `/chapter-end {id}`
-End the chapter at a message (equivalent to the Stop button)
-- `id`: Message ID (defaults to most recent)
-- Named arguments:
-  - `profile`: Connection profile override
-- Note: `/scene-end` is still supported as an alias for backward compatibility
-
-### `/timeline-query chapter={n} {query}`
-Query a specific chapter from the timeline
-- `chapter`: Chapter number (required, 1-based)
-- `query`: The question to ask (required)
-
-### `/timeline-undo {id}`
-Remove a chapter end marker and its timeline entry
-- `id`: Message ID (defaults to most recent)
-
-### `/timeline-remove {n}`
-Force remove a chapter entry from the timeline by chapter number (helpful if a marker was not cleaned up correctly)
-- `n`: Chapter number to remove (1-based)
-
-### `/timeline-migrate`
-Migrate old timeline entries to the new format by removing timestamps. Use this command if you have timeline entries created before version 2.1.0.
-- No arguments required
-- Will report how many entries were migrated
-
-### `/chapter-summary {n}`
-Get the summary of a specific chapter from the timeline
-- `n`: Chapter number (required, 1-based)
-
-### `/resummarize chapter={n}`
-Regenerate the stored summary for an existing chapter without changing its position in the timeline
-- `chapter`: Chapter number to re-summarize (required, 1-based)
-- Named arguments:
-  - `profile`: Connection profile override for the regeneration request
-  - `quiet`: Suppress toast notifications while the command runs
-
-### `/arc-analyze [profile={name}]`
-Analyze the current chat for self-contained arcs and show a popup with buttons to apply each proposed chapter end.
-- `profile`: Optional connection profile name to override the configured Arc Analyzer profile
-
-### `/remove-reasoning {range}`
-Remove reasoning/thinking blocks from assistant messages in the specified range
-- `range`: Single ID (e.g., `5`) or range (`1-10`)
-- Skips user messages automatically and refreshes the chat once complete
-
-### `/remove-tool-calls`
-Remove tool invocation messages and their associated assistant prompts
-- No arguments required
-- Clears both the tool call summaries and the assistant message that asked for them
 
 ## Requirements
 
 - SillyTavern version 1.13.0 or higher
 - Connection Manager extension (for profile selection)
 
-## Changelog
+## Quick Start
 
-### v2.3.0
-- Added `/remove-reasoning` and `/remove-tool-calls` cleanup commands directly to Timeline Memory
-- Improved chat refresh after cleanup toasts for better feedback
+1. **Create Connection Profiles**: Set up profiles in Connection Manager for your AI providers
+2. **Enable Inject at Depth**: Turn on automatic timeline injection (recommended for most users)
+3. **Create Chapters**: Use Arc Analyzer or manual chapter buttons to create chapter summaries
+4. **Use Timeline Fill**: Click the quick buttons to retrieve relevant context before sending messages
 
-### v2.1.0
-- **Removed**: System timestamps from timeline entries for cleaner output
-- **Added**: `/timeline-migrate` command to update old timeline entries
-- Timeline now shows only chapter number and message range without timestamps
+## Core Concepts
 
-## Changes from v1.x
+### Chapters
 
-This is a major rework that changes the core functionality:
-- **Removed**: Lorebook/World Info memory entries
-- **Removed**: Individual message memory generation
-- **Added**: Timeline-based chapter tracking
-- **Added**: AI function calls for chapter queries
-- **Added**: {{timeline}} macro for accessing chapter history
+A chapter represents a segment of your chat with an AI-generated summary. Chapters are defined by their endpoints - when you "end a chapter," the extension summarizes all messages from the previous chapter end (or chat start) to that point.
+
+### Timeline
+
+The timeline is a chronological list of all your chapter summaries, stored in the chat metadata. It's accessible via the `{{timeline}}` macro and can be automatically injected into the AI's context.
+
+### Connection Profiles
+
+Timeline Memory uses SillyTavern's Connection Manager profiles for all AI API calls. Different profiles can be assigned to different tasks (summarization, queries, arc analysis, etc.).
+
+## Features Guide
+
+### Chapter Management
+
+#### Arc Analyzer (Recommended)
+
+The Arc Analyzer scans your chat and suggests natural chapter endpoints based on story beats.
+
+1. Select an **Arc Analyzer Profile** in settings (or use default)
+2. Click **"Analyze Arcs"** button
+3. Review the suggested chapter breaks in the popup
+4. Click on any arc to create a chapter ending at that point
+
+The AI will summarize everything from the start (or last chapter) to the selected point.
+
+#### Manual Chapter Creation
+
+Click the **Stop button** on any message to manually end a chapter:
+
+1. Hover over any message in the chat
+2. Click the stop button that appears
+3. The AI summarizes all messages from the previous chapter end to that message
+
+The button only appears if "End Chapter" is enabled in Message Buttons settings.
+
+#### Viewing & Editing Summaries
+
+Chapter summaries appear in the **Summaries** section of the settings panel:
+
+- **Edit** summaries by clicking directly on the text
+- **Expand** using the expand button for a larger editor
+- **Save** changes with the Save button
+
+Good summaries lead to better recall - focus on key plot points, character changes, and important details.
+
+### Timeline Fill (Smart Retrieval)
+
+Timeline Fill automatically queries your chapter history to gather relevant context for the current conversation.
+
+**How it works:**
+1. The AI reads your current chat and chapter summaries
+2. It identifies what past information is relevant
+3. It queries the appropriate chapters and retrieves details
+4. Results are stored in `{{timelineResponses}}` and injected into context
+
+**Quick Buttons** (in the bottom bar near the send button):
+- **Chat bubble** - Retrieve and Send: Retrieves timeline context, then sends your message
+- **Recycle wheel** - Retrieve and Swipe: Retrieves timeline context, then regenerates the last response
+
+### Inject at Depth
+
+Inject at Depth automatically adds your timeline to the AI's context without manual prompt editing.
+
+**To enable:**
+1. Check "Enable Timeline Injection"
+2. Set **Injection Depth** (0 = at the end, higher = further back in history)
+3. Choose **Injection Role** (System recommended)
+
+The default prompt template includes:
+- `{{timeline}}` - Your chapter summaries
+- `{{timelineResponses}}` - Retrieved context from Timeline Fill
+- `{{lastMessageId}}` and `{{firstIncludedMessageId}}` - Position info
+
+**Depth explained:**
+- Depth 0: Appears after all messages (closest to AI response)
+- Depth 1: Appears before the last message
+- Higher depths: Pushes the injection further back
+
+### Presets
+
+Presets let you save and switch between different prompt configurations.
+
+**Preset types:**
+- **Summarization**: Prompts for creating chapter summaries
+- **Query**: Prompts for answering chapter questions
+- **Timeline Fill**: Prompts for context retrieval
+- **Arc Analyzer**: Prompts for detecting story arcs
+
+**Managing presets:**
+- **Save**: Create a new preset from current settings
+- **Update**: Overwrite the selected preset
+- **Delete**: Remove the selected preset
+- **Export/Import**: Share presets as JSON files
+- **Export All / Import All**: Backup/restore your entire configuration
+
+### Lore Management Mode
+
+Lore Management Mode lets the AI automatically update your character's lorebook based on story events.
+
+**What it does:**
+The AI reads your story, identifies important lore (characters, locations, events, relationships), and creates/updates lorebook entries automatically.
+
+**Requirements:**
+- A character with an assigned World Info/Lorebook
+- A capable AI model that supports function/tool calls
+- A properly configured Lore Management profile
+
+**To use:**
+1. Create a Lore Management Profile using a powerful model with tool support
+2. Select the profile in the Lore Management section
+3. Ensure your character has a lorebook assigned
+4. Enable "Lore Management Mode"
+5. Click "Run Lore Management"
+6. The AI analyzes your story and edits the lorebook
+7. When done, it signals completion automatically
+
+**The AI can:**
+- List existing lorebook entries
+- Create new entries with keywords
+- Update existing entries with new information
+- Set entries as "constant" (always active) or keyword-triggered
+- Delete entries when appropriate
+
+### AI Tool Calls
+
+When "Enable Tool/Function Calls" is checked, the AI can query chapters directly:
+- `query_timeline_chapter`: Query a single chapter
+- `query_timeline_chapters`: Query a range of chapters
+
+This allows the AI to access the full content of any summarized chapter and answer questions about specific events.
+
+## Macros
+
+The extension provides the following macros for use in prompts:
+
+| Macro | Description |
+|-------|-------------|
+| `{{timeline}}` | JSON-formatted timeline of all chapter summaries with chapter IDs and message ranges |
+| `{{chapter}}` | All chapter contents with headers in order |
+| `{{chapterSummary}}` | All chapter summaries with headers in order |
+| `{{chapterHistory}}` | Visible chat history as JSON array of `{ id, name, role, text }` |
+| `{{timelineResponses}}` | Latest timeline fill query results as JSON array |
+| `{{lastMessageId}}` | The ID of the most recent message in the chat |
+| `{{firstIncludedMessageId}}` | The ID of the first message in the current chapter |
+
+## Slash Commands
+
+### Chapter Management
+
+| Command | Description |
+|---------|-------------|
+| `/chapter-end {id}` | End the chapter at a message (defaults to most recent). Options: `profile` |
+| `/timeline-undo {id}` | Remove a chapter end marker and its timeline entry |
+| `/timeline-remove {n}` | Force remove a chapter by number (useful if marker cleanup failed) |
+| `/resummarize chapter={n}` | Regenerate summary for an existing chapter. Options: `profile`, `quiet` |
+
+### Queries
+
+| Command | Description |
+|---------|-------------|
+| `/timeline-query chapter={n} {question}` | Query a specific chapter with a question |
+| `/timeline-query-chapters start={n} end={m} {question}` | Query a range of chapters |
+| `/chapter-summary {n}` | Get the summary of a specific chapter |
+
+### Timeline Fill
+
+| Command | Description |
+|---------|-------------|
+| `/timeline-fill` | Generate and execute timeline queries, store results in `{{timelineResponses}}`. Options: `profile`, `await` |
+| `/timeline-fill-status` | Preview stored timeline fill results |
+
+### Analysis & Management
+
+| Command | Description |
+|---------|-------------|
+| `/arc-analyze` | Analyze the chat for arc endpoints and show popup. Options: `profile` |
+| `/lore-manage` | Start a lore management session |
+
+### Chat Cleanup
+
+| Command | Description |
+|---------|-------------|
+| `/remove-reasoning {range}` | Remove reasoning/thinking blocks from messages (e.g., `5` or `1-10`) |
+| `/remove-tool-calls` | Remove all tool call messages and their invoking prompts |
+
+### Utility
+
+| Command | Description |
+|---------|-------------|
+| `/timeline-migrate` | Migrate old timeline entries to current format |
+
+## Configuration
+
+### General Settings
+
+- **Enable Tool/Function Calls**: Allow the AI to query chapters via function calls
+- **Start Tutorial**: Launch the interactive tutorial
+- **Export All / Import All**: Backup and restore your entire configuration
+
+### API Connection Profiles
+
+- **Summarization Profile**: For chapter summarization
+- **Chapter Query Profile**: For answering chapter questions
+- **Timeline Fill Profile**: For generating retrieval queries
+- **Arc Analyzer Profile**: For detecting story arcs
+- **Lore Management Profile**: For lorebook editing
+- **Max Requests per Minute**: Rate limiting to avoid API throttling
+
+### Prompts
+
+Each workflow type has configurable system and user prompts with macro support.
+
+### Chapter Settings
+
+- **Hide Summarized Messages**: Automatically hide messages after summarizing
+- **Add chunk summaries**: Include individual chunk summaries as comments (for long chapters)
+
+### Inject at Depth
+
+- **Enable Timeline Injection**: Toggle automatic timeline injection
+- **Injection Depth**: Position in message history (0 = end)
+- **Injection Role**: System, User, or Assistant
+- **Injection Prompt Template**: Customizable template with macro support
+
+## Version History
+
+| Version | Features |
+|---------|----------|
+| v1.0 | Initial release with tool calling for chapter queries |
+| v1.1 | Added presets for summarization and query configurations |
+| v1.2 | Added Arc Analyzer for automatic chapter endpoint detection |
+| v1.3 | Added Timeline Fill for non-tool based memory retrieval |
+| v1.4 | Fixed timeline responses, added master import/export |
+| v1.5 | Added Lore Management Mode for autonomous lorebook editing |
+| v1.6 | Arc Analyzer revamp, added modifiable chapter summaries |
+| v1.7 | Updated default prompts |
+| v1.8 | Usability update: tutorial mode, timeline-fill buttons, inject at depth, progress bar |
 
 ## Support
 
-Feel free to open issues or PRs directly here, although no promises on timely resolution.
+Feel free to open issues or PRs directly on GitHub, although no promises on timely resolution.
 
 There is also a thread in the official SillyTavern Discord you're welcome to comment in!
