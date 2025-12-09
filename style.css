@@ -181,3 +181,317 @@
   cursor: not-allowed;
   pointer-events: none;
 }
+
+/* ===============================================
+   Retrieval Progress Notification Styles
+   =============================================== */
+
+.rmr-retrieval-progress-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10000;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.rmr-retrieval-progress-overlay.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.rmr-retrieval-progress-overlay.hiding {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.rmr-retrieval-progress-popup {
+  background: var(--SmartThemeBlurTintColor);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  min-width: 280px;
+  max-width: 320px;
+  overflow: hidden;
+}
+
+.rmr-retrieval-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(138, 180, 248, 0.15), rgba(129, 201, 149, 0.15));
+  border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.rmr-retrieval-icon {
+  font-size: 20px;
+  color: var(--SmartThemeEmColor);
+  animation: rmr-brain-pulse 2s ease-in-out infinite;
+}
+
+@keyframes rmr-brain-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.rmr-retrieval-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--SmartThemeEmColor);
+}
+
+.rmr-retrieval-progress-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rmr-retrieval-phase {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+  opacity: 0.5;
+}
+
+.rmr-retrieval-phase.active {
+  opacity: 1;
+  background: rgba(138, 180, 248, 0.1);
+  border-color: var(--SmartThemeEmColor);
+}
+
+.rmr-retrieval-phase.completed {
+  opacity: 0.7;
+  background: rgba(129, 201, 149, 0.1);
+  border-color: rgba(129, 201, 149, 0.5);
+}
+
+.rmr-phase-indicator {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--SmartThemeBorderColor);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rmr-retrieval-phase.active .rmr-phase-indicator {
+  background: var(--SmartThemeEmColor);
+}
+
+.rmr-retrieval-phase.completed .rmr-phase-indicator {
+  background: rgba(129, 201, 149, 0.8);
+}
+
+.rmr-phase-indicator i {
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor);
+}
+
+.rmr-retrieval-phase.active .rmr-phase-indicator i,
+.rmr-retrieval-phase.completed .rmr-phase-indicator i {
+  color: var(--SmartThemeBlurTintColor);
+}
+
+.rmr-phase-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rmr-phase-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--SmartThemeBodyColor);
+}
+
+.rmr-retrieval-phase.active .rmr-phase-title {
+  color: var(--SmartThemeEmColor);
+}
+
+.rmr-phase-desc {
+  font-size: 11px;
+  color: var(--SmartThemeQuoteColor);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Progress bar container - wrapper for the bar and text */
+#rmr-progress-container {
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  margin-top: 8px;
+  gap: 10px;
+}
+
+.rmr-retrieval-phase.active #rmr-progress-container {
+  display: flex;
+}
+
+.rmr-progress-bar-container {
+  flex: 1;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.rmr-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--SmartThemeEmColor), rgba(129, 201, 149, 0.9));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.rmr-progress-bar-pending {
+  height: 100%;
+  width: 0%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(129, 201, 149, 0.5), rgba(138, 180, 248, 0.5));
+  display: none;
+  overflow: hidden;
+}
+
+.rmr-progress-bar-pending::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: rmr-shimmer 1s infinite;
+}
+
+@keyframes rmr-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.rmr-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--SmartThemeEmColor);
+  white-space: nowrap;
+  min-width: 35px;
+  text-align: right;
+}
+
+/* Mobile responsive - top-center positioning */
+@media (max-width: 768px) {
+  .rmr-retrieval-progress-overlay {
+    bottom: auto;
+    top: 10px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+  }
+
+  .rmr-retrieval-progress-overlay.active {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .rmr-retrieval-progress-overlay.hiding {
+    transform: translateX(-50%) translateY(-20px);
+  }
+
+  .rmr-retrieval-progress-popup {
+    min-width: auto;
+    max-width: calc(100vw - 20px);
+    width: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+  }
+
+  .rmr-retrieval-progress-header {
+    padding: 8px 14px;
+  }
+
+  .rmr-retrieval-icon {
+    font-size: 16px;
+  }
+
+  .rmr-retrieval-title {
+    font-size: 13px;
+  }
+
+  .rmr-retrieval-progress-body {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .rmr-retrieval-phase {
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .rmr-phase-indicator {
+    width: 24px;
+    height: 24px;
+  }
+
+  .rmr-phase-indicator i {
+    font-size: 10px;
+  }
+
+  .rmr-phase-title {
+    font-size: 12px;
+  }
+
+  .rmr-phase-desc {
+    font-size: 10px;
+  }
+
+  #rmr-progress-container {
+    margin-top: 6px;
+    gap: 8px;
+  }
+
+  .rmr-progress-bar-container {
+    height: 6px;
+  }
+
+  .rmr-progress-text {
+    font-size: 10px;
+    min-width: 28px;
+  }
+}

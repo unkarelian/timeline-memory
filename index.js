@@ -4,6 +4,7 @@ import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
 import { loadSettings, changeCharaName, renderSummariesList } from "./src/settings.js";
 import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection } from "./src/memories.js";
+import { showRetrievalProgress, hideRetrievalProgress } from "./src/retrieval-progress.js";
 
 export const extension_name = 'timeline-memory';
 
@@ -70,12 +71,18 @@ function initQuickReplyButtons() {
 	retrieveAndSendBtn.on('click', async () => {
 		if (retrieveAndSendBtn.hasClass('disabled')) return;
 		retrieveAndSendBtn.addClass('disabled');
+		// Change icon to spinning gear
+		retrieveAndSendBtn.removeClass('fa-comment-dots').addClass('fa-gear fa-spin');
+		showRetrievalProgress('analysis');
 		try {
 			await getContext().executeSlashCommandsWithOptions('/send {{input}} | /setinput | /timeline-fill await=true | /trigger |');
 		} catch (err) {
 			console.error('Timeline Memory: Retrieve and Send failed:', err);
 			toastr.error('Retrieve and Send failed: ' + err.message, 'Timeline Memory');
 		} finally {
+			hideRetrievalProgress();
+			// Restore original icon
+			retrieveAndSendBtn.removeClass('fa-gear fa-spin').addClass('fa-comment-dots');
 			retrieveAndSendBtn.removeClass('disabled');
 		}
 	});
@@ -84,12 +91,18 @@ function initQuickReplyButtons() {
 	retrieveAndSwipeBtn.on('click', async () => {
 		if (retrieveAndSwipeBtn.hasClass('disabled')) return;
 		retrieveAndSwipeBtn.addClass('disabled');
+		// Change icon to spinning gear
+		retrieveAndSwipeBtn.removeClass('fa-rotate').addClass('fa-gear fa-spin');
+		showRetrievalProgress('analysis');
 		try {
 			await getContext().executeSlashCommandsWithOptions('/hide {{lastMessageId}} | /timeline-fill await=true | /unhide {{lastMessageId}} |');
 		} catch (err) {
 			console.error('Timeline Memory: Retrieve and Swipe failed:', err);
 			toastr.error('Retrieve and Swipe failed: ' + err.message, 'Timeline Memory');
 		} finally {
+			hideRetrievalProgress();
+			// Restore original icon
+			retrieveAndSwipeBtn.removeClass('fa-gear fa-spin').addClass('fa-rotate');
 			retrieveAndSwipeBtn.removeClass('disabled');
 		}
 	});

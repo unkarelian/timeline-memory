@@ -11,6 +11,7 @@ import { oai_settings, openai_settings, chat_completion_sources, reasoning_effor
 import { reasoning_templates } from "../../../../../scripts/reasoning.js";
 import { getPresetManager } from "../../../../../scripts/preset-manager.js";
 import { isLoreManagementActive } from "./lore-management.js";
+import { updateRetrievalProgress, isProgressVisible } from "./retrieval-progress.js";
 
 const runSlashCommand = getContext().executeSlashCommandsWithOptions;
 const CHAT_COMPLETION_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
@@ -1327,6 +1328,27 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 
 		setTimelineFillResults([]);
 
+		// Count total queries for progress tracking
+		let totalQueries = 0;
+		for (const task of tasks) {
+			const { chapters } = task;
+			if (!chapters.length) continue;
+			const contiguous = chaptersAreContiguous(chapters);
+			// Range queries count as 1, non-contiguous chapters count individually
+			if (contiguous && chapters.length > 1) {
+				totalQueries += 1;
+			} else {
+				totalQueries += chapters.length;
+			}
+		}
+
+		// Switch to querying phase if progress is visible
+		if (isProgressVisible()) {
+			updateRetrievalProgress({ phase: 'querying', current: 0, total: totalQueries });
+		}
+
+		let completedQueries = 0;
+
 		try {
 			for (const task of tasks) {
 				const { query, chapters } = task;
@@ -1361,6 +1383,10 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 							error: error?.message || String(error),
 						});
 					}
+					completedQueries++;
+					if (isProgressVisible()) {
+						updateRetrievalProgress({ current: completedQueries, total: totalQueries });
+					}
 				} else {
 					for (const chapter of chapters) {
 						try {
@@ -1385,8 +1411,17 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 								error: error?.message || String(error),
 							});
 						}
+						completedQueries++;
+						if (isProgressVisible()) {
+							updateRetrievalProgress({ current: completedQueries, total: totalQueries });
+						}
 					}
 				}
+			}
+
+			// Mark as complete
+			if (isProgressVisible()) {
+				updateRetrievalProgress({ phase: 'complete', current: completedQueries, total: totalQueries, message: 'All queries complete!' });
 			}
 		} finally {
 			commandArgs = previousCommandArgs;
