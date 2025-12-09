@@ -219,10 +219,14 @@ function registerChapterQueryTool() {
 	});
 
 	// Register the multiple chapters query tool
+	const chapterLimit = settings.query_chapter_limit || 0;
+	const limitDescription = chapterLimit > 0
+		? ` Limited to a maximum of ${chapterLimit} chapters per query.`
+		: '';
 	context.ToolManager.registerFunctionTool({
 		name: 'query_timeline_chapters',
 		displayName: 'Query Timeline Chapters',
-		description: 'Query multiple chapters from the chat timeline with a question',
+		description: `Query multiple chapters from the chat timeline with a question.${limitDescription}`,
 		stealth: false,
 		parameters: {
 			type: 'object',
@@ -245,6 +249,11 @@ function registerChapterQueryTool() {
 			required: ['startChapter', 'endChapter', 'query']
 		},
 		action: async (args) => {
+			const limit = settings.query_chapter_limit || 0;
+			const chapterCount = args.endChapter - args.startChapter + 1;
+			if (limit > 0 && chapterCount > limit) {
+				return `Error: Cannot query more than ${limit} chapters at once. Requested ${chapterCount} chapters (${args.startChapter}-${args.endChapter}). Please narrow your range.`;
+			}
 			loadTimelineData(); // Ensure timeline is loaded
 			const result = await queryChapters(args.startChapter, args.endChapter, args.query);
 			return result;

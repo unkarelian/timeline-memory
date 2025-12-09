@@ -1,4 +1,4 @@
-const TUTORIAL_VERSION = 2;
+const TUTORIAL_VERSION = 3;
 const STORAGE_KEY = 'timeline-memory-tutorial-completed';
 
 // Tutorial step definitions
@@ -28,6 +28,30 @@ Profiles let you save different API configurations (provider, model, settings) a
 • <b>Summarization:</b> A powerful model (quality matters!)
 • <b>Everything else:</b> Fast, cheap models work fine`,
         highlight: '#rmr_profile'
+    },
+    {
+        id: 'query-limits',
+        title: 'Query Limits - Coherency Control',
+        content: `<b>Query Limits</b> help you control API costs and prevent context rot.
+
+<b>Max Chapters per Query:</b>
+Limits how many chapters can be queried at once. When the AI (or Timeline Fill) tries to query more chapters than this limit, the request is rejected or skipped.
+
+• Default: 3 chapters
+• Set to 0 for unlimited
+
+<i>Why use it?</i> Querying many chapters at once uses lots of tokens. While many models claim to have context length in the hundreds of thousands, real performance degrades after 16k-32k.
+
+<b>Max Timeline Fill Queries:</b>
+Limits the total number of queries a single Timeline Fill operation can make.
+
+• Default: 0 (unlimited)
+• Set to a number to cap queries
+
+<i>Why use it?</i> Timeline Fill asks the AI to generate queries, which can sometimes produce many requests. This can take up large amounts of time.
+
+<b>Tip:</b> Start with defaults and adjust based on your usage patterns.`,
+        highlight: '#rmr_query_chapter_limit'
     },
     {
         id: 'inject-at-depth',

@@ -109,6 +109,8 @@ Provide a JSON array where each item describes a question to ask about the timel
   OR both "startChapter" and "endChapter" integers defining an inclusive range.
 You may include both styles in the same array. Return ONLY the JSON array, no code fences or commentary.`,
 	"rate_limit": 0, // requests per minute. 0 means no limit
+	"query_chapter_limit": 3, // max chapters per query (0 = unlimited)
+	"timeline_fill_query_limit": 0, // max queries per timeline fill (0 = unlimited)
 	"profile": null, // optional connection-profile override for summarization
 	"query_profile": null, // optional connection-profile override for chapter queries
 	"timeline_fill_profile": null, // optional profile override for timeline fill generation
@@ -209,7 +211,7 @@ You will be provided with the entirety of the current chapter, as well as summar
 </task>
 
 <constraints>
-Query based ONLY on the information visible in the chapter summaries or things that may be implied to have happened in them. Do not reference current events in your queries, as the assistant that answers queries is only provided the history of that chapter, and would have no knowledge of events outside of the chapters queried. However, do not ask about information directly answered in the summaries. Instead, try to ask questions that 'fill in the gaps'. The maximum range of chapters for a single query is 3, but you may make as many queries as you wish.
+Query based ONLY on the information visible in the chapter summaries or things that may be implied to have happened in them. Do not reference current events in your queries, as the assistant that answers queries is only provided the history of that chapter, and would have no knowledge of events outside of the chapters queried. However, do not ask about information directly answered in the summaries. Instead, try to ask questions that 'fill in the gaps'. The maximum range of chapters (startChapter - endChapter) for a single query is 3, but you may make as many queries as you wish.
 </constraints>`,
 			"userPrompt": `Visible chat history:
 {{chapterHistory}}
@@ -534,7 +536,7 @@ async function loadSettingsUI() {
 			getContext().saveSettingsDebounced();
 		}
 	});
-	
+
 	// Add query profile dropdown
 	const queryProfileSelect = $('#rmr_query_profile');
 	queryProfileSelect.append('<option value="">-- No Override --</option>');
@@ -548,7 +550,7 @@ async function loadSettingsUI() {
 			if (settings.query_profile == profile.id) queryProfileSelect.val(profile.id);
 		}
 	}
-	
+
     queryProfileSelect.on('input', () => {
         const profile = queryProfileSelect.val();
         if (!profile.length) {
@@ -699,6 +701,13 @@ async function loadSettingsUI() {
 		const setting_key = elem.id.replace('rmr_', '');
 		elem.value = settings[setting_key];
 		$(elem).on('change', handleIntValueChange);
+	});
+
+	// Special handler for query_chapter_limit to re-register tools with updated description
+	$('#rmr_query_chapter_limit').off('change').on('change', async (e) => {
+		handleIntValueChange(e);
+		const { updateToolRegistration } = await import('./commands.js');
+		updateToolRegistration();
 	});
 	// load all text settings
 	$(`.rmr-extension_block textarea`).each((_i, elem) => {
@@ -1133,7 +1142,7 @@ ${settings.keywords_prompt}`;
 		settings.chapter_query_prompt_template = settings.scene_query_prompt_template.replace(/{{scene}}/gi, '{{chapter}}').replace(/scenes/gi, 'chapters');
 		delete settings.scene_query_prompt_template;
 	}
-	
+
 	// load default values into settings
 	for (const key in defaultSettings) {
 		if (settings[key] === undefined) {

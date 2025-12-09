@@ -173,10 +173,26 @@
 						</select>
 					</div>
 				</div>
-				<label for="rmr_rate_limit">
-					<span>Max Requests per Minute</span>
-					<input class="text_pole widthUnset" id="rmr_rate_limit" type="number">
-				</label>
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_rate_limit">
+							<small>Max Requests per Minute</small>
+						</label>
+						<input class="text_pole widthNatural" id="rmr_rate_limit" type="number">
+					</div>
+					<div class="flex-container flex1 flexFlowColumn" title="Maximum number of chapters that can be queried at once. Set to 0 for unlimited.">
+						<label for="rmr_query_chapter_limit">
+							<small>Max Chapters per Query</small>
+						</label>
+						<input class="text_pole widthNatural" id="rmr_query_chapter_limit" type="number" min="0">
+					</div>
+					<div class="flex-container flex1 flexFlowColumn" title="Maximum number of queries a timeline fill can make. Set to 0 for unlimited.">
+						<label for="rmr_timeline_fill_query_limit">
+							<small>Max Timeline Fill Queries</small>
+						</label>
+						<input class="text_pole widthNatural" id="rmr_timeline_fill_query_limit" type="number" min="0">
+					</div>
+				</div>
 			</div>
 			<hr>
 			<h4>Presets</h4>

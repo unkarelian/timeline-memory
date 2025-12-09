@@ -1328,18 +1328,29 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 
 		setTimelineFillResults([]);
 
-		// Count total queries for progress tracking
+		// Count total queries for progress tracking (excluding those that exceed the chapter limit)
+		const chapterLimit = settings.query_chapter_limit || 0;
+		const queryLimit = settings.timeline_fill_query_limit || 0;
 		let totalQueries = 0;
 		for (const task of tasks) {
 			const { chapters } = task;
 			if (!chapters.length) continue;
 			const contiguous = chaptersAreContiguous(chapters);
 			// Range queries count as 1, non-contiguous chapters count individually
+			// Skip range queries that exceed the chapter limit (if limit is set)
 			if (contiguous && chapters.length > 1) {
-				totalQueries += 1;
+				if (chapterLimit === 0 || chapters.length <= chapterLimit) {
+					totalQueries += 1;
+				}
 			} else {
 				totalQueries += chapters.length;
 			}
+		}
+
+		// Apply query limit if set
+		if (queryLimit > 0 && totalQueries > queryLimit) {
+			debug(`Timeline fill limiting queries from ${totalQueries} to ${queryLimit}`);
+			totalQueries = queryLimit;
 		}
 
 		// Switch to querying phase if progress is visible
@@ -1361,6 +1372,11 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 				const end = chapters[chapters.length - 1];
 
 				if (contiguous && chapters.length > 1) {
+					// Skip queries that exceed the chapter limit (if limit is set)
+					if (chapterLimit > 0 && chapters.length > chapterLimit) {
+						debug(`Timeline fill skipping query: exceeds ${chapterLimit}-chapter limit (${chapters.length} chapters requested)`);
+						continue;
+					}
 					try {
 						const response = await queryChapters(start, end, query);
 						aggregatedResults.push({
@@ -1387,8 +1403,18 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 					if (isProgressVisible()) {
 						updateRetrievalProgress({ current: completedQueries, total: totalQueries });
 					}
+					// Stop if we've hit the query limit
+					if (queryLimit > 0 && completedQueries >= queryLimit) {
+						debug(`Timeline fill reached query limit of ${queryLimit}`);
+						break;
+					}
 				} else {
 					for (const chapter of chapters) {
+						// Stop if we've hit the query limit
+						if (queryLimit > 0 && completedQueries >= queryLimit) {
+							debug(`Timeline fill reached query limit of ${queryLimit}`);
+							break;
+						}
 						try {
 							const response = await queryChapter(chapter, query);
 							aggregatedResults.push({
@@ -1416,6 +1442,10 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 							updateRetrievalProgress({ current: completedQueries, total: totalQueries });
 						}
 					}
+				}
+				// Stop outer loop if we've hit the query limit
+				if (queryLimit > 0 && completedQueries >= queryLimit) {
+					break;
 				}
 			}
 
