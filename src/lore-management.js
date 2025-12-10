@@ -91,6 +91,7 @@ const loreManagementState = {
     hiddenMessageEnd: -1,    // Last message index that was hidden
     sessionChatId: null,     // Chat ID when session started (to detect actual chat switches)
     retryCount: 0,           // Counter to prevent infinite retry loops on errors
+    sessionCompleteResolve: null, // Promise resolve function for await support
 };
 
 const MAX_RETRIES = 5;  // Maximum number of consecutive retries before aborting
@@ -424,17 +425,20 @@ async function editLorebookEntry(args) {
  * @returns {string} Confirmation message
  */
 function endLoreManagementTool() {
+    // Immediately disable the session to prevent any async callbacks from proceeding
+    // This must happen BEFORE any await points to prevent race conditions
+    loreManagementState.active = false;
     loreManagementState.endRequested = true;
-    log('End lore management requested via tool');
+    log('End lore management requested via tool - session marked inactive');
 
     // Stop the generation monitor FIRST to prevent spurious swipes from generation_ended events
     stopGenerationMonitor();
 
-    // Stop any further generation immediately
-    stopGeneration();
-
-    // Directly initiate cleanup (async, don't await)
-    cleanupLoreManagementSession();
+    // Schedule cleanup to happen after this tool returns
+    // Use setTimeout to ensure the tool response is processed first
+    setTimeout(() => {
+        cleanupLoreManagementSession();
+    }, 100);
 
     return 'Lore management session ending. All lorebook changes have been saved.';
 }
@@ -594,7 +598,7 @@ function getProfileNameById(profileId) {
 
 /**
  * Start a lore management session
- * @returns {Promise<void>}
+ * @returns {Promise<void>} Resolves when the session is fully complete
  */
 export async function startLoreManagementSession() {
     if (loreManagementState.active) {
@@ -615,6 +619,11 @@ export async function startLoreManagementSession() {
     }
 
     const context = getContext();
+
+    // Create a promise that resolves when the session is complete
+    const sessionCompletePromise = new Promise((resolve) => {
+        loreManagementState.sessionCompleteResolve = resolve;
+    });
 
     // Save current state
     loreManagementState.savedProfileId = extension_settings.connectionManager?.selectedProfile || null;
@@ -670,8 +679,13 @@ export async function startLoreManagementSession() {
 
         log('Added lore management user message');
 
-        // Trigger initial generation - SillyTavern handles tool flow automatically
+        // Trigger initial generation (this starts the async monitoring loop)
         await triggerLoreManagement();
+
+        // Wait for the session to complete (cleanup will resolve this)
+        log('Waiting for lore management session to complete...');
+        await sessionCompletePromise;
+        log('Lore management session completed');
 
     } catch (err) {
         error('Lore management session failed:', err);
@@ -761,8 +775,23 @@ function onGenerationEnded() {
                 }
             }
 
+            // Final check right before swipe
             if (!loreManagementState.active || loreManagementState.endRequested) {
                 log('Bailing: session state changed after swipe wait');
+                return;
+            }
+
+            // Reload chat to ensure fresh state before swipe
+            log(`Swipe attempt ${i + 1}: reloading chat before swipe...`);
+            try {
+                await reloadCurrentChat();
+            } catch (reloadErr) {
+                log(`Chat reload failed: ${reloadErr.message}, continuing anyway`);
+            }
+
+            // Check again after reload
+            if (!loreManagementState.active || loreManagementState.endRequested) {
+                log('Bailing: session state changed after chat reload');
                 return;
             }
 
@@ -773,6 +802,11 @@ function onGenerationEnded() {
                 swipeSucceeded = true;
                 break;
             } catch (swipeErr) {
+                // If session ended during swipe, bail silently
+                if (!loreManagementState.active || loreManagementState.endRequested) {
+                    log('Swipe error after session ended, bailing silently');
+                    return;
+                }
                 log(`Swipe attempt ${i + 1} failed: ${swipeErr.message}`);
                 if (i < SWIPE_RETRY_DELAYS.length - 1) {
                     log(`Waiting ${SWIPE_RETRY_DELAYS[i]}ms before next swipe attempt...`);
@@ -800,12 +834,23 @@ function onGenerationEnded() {
                 log('Trigger completed successfully');
                 return;  // Trigger worked
             } catch (triggerErr) {
+                // If session ended during trigger, bail silently
+                if (!loreManagementState.active || loreManagementState.endRequested) {
+                    log('Trigger error after session ended, bailing silently');
+                    return;
+                }
                 log(`Trigger attempt ${i + 1} failed: ${triggerErr.message}`);
                 if (i < TRIGGER_RETRY_DELAYS.length - 1) {
                     log(`Waiting ${TRIGGER_RETRY_DELAYS[i]}ms before next trigger attempt...`);
                     await new Promise(resolve => setTimeout(resolve, TRIGGER_RETRY_DELAYS[i]));
                 }
             }
+        }
+
+        // Final check before aborting
+        if (!loreManagementState.active || loreManagementState.endRequested) {
+            log('Session ended during retries, no need to abort');
+            return;
         }
 
         // All attempts failed - abort the session
@@ -859,7 +904,10 @@ async function triggerLoreManagement() {
  * Clean up after a lore management session
  */
 async function cleanupLoreManagementSession() {
-    if (!loreManagementState.active) {
+    // Use sessionCompleteResolve as the indicator of whether cleanup is needed
+    // (it's only set when a session starts and cleared when cleanup finishes)
+    if (!loreManagementState.sessionCompleteResolve) {
+        log('Cleanup called but no active session to clean up');
         return;
     }
 
@@ -934,6 +982,13 @@ async function cleanupLoreManagementSession() {
         } catch (err) {
             debug('Could not restore timeline injection:', err.message);
         }
+
+        // Resolve the session complete promise so awaiting callers can continue
+        if (loreManagementState.sessionCompleteResolve) {
+            log('Resolving session complete promise');
+            loreManagementState.sessionCompleteResolve();
+            loreManagementState.sessionCompleteResolve = null;
+        }
     }
 }
 
@@ -941,11 +996,13 @@ async function cleanupLoreManagementSession() {
  * Abort an active lore management session
  */
 export async function abortLoreManagementSession() {
-    if (!loreManagementState.active) {
+    // Check if there's actually a session to abort
+    if (!loreManagementState.sessionCompleteResolve) {
         return;
     }
 
     log('Aborting lore management session');
+    loreManagementState.active = false;
     loreManagementState.endRequested = true;
     stopGeneration();
     await cleanupLoreManagementSession();
