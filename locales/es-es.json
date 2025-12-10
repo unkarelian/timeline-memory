@@ -1,0 +1,125 @@
+{
+    "tutorial_welcome_title": "Bienvenido a Timeline Memory",
+    "tutorial_welcome_content": "Timeline Memory es un sistema creado para el recuerdo preciso de historias extensas. Puede parecer complicado, pero con este tutorial te explicaremos paso a paso cómo funciona.\n\n<i>Consejo:</i> Puedes arrastrar esta ventana y navegar con los botones de abajo. ¡También puedes hacer scroll!",
+
+    "tutorial_connection_profiles_title": "Creando Perfiles de Conexión",
+    "tutorial_connection_profiles_content": "Timeline Memory usa <b>Perfiles de Conexión</b> de la extensión Connection Manager para hacer llamadas a la API.\n\n<b>¿Qué son los Perfiles de Conexión?</b>\nLos perfiles te permiten guardar distintas configuraciones de API (proveedor, modelo, ajustes) y alternar entre ellas. Esta extensión usa perfiles para usar diferentes modelos en diferentes tareas.\n\n<b>Para crear un perfil:</b>\n1. Abre <i>API Connections</i> (ícono de 'enchufe' en la esquina superior izquierda de SillyTavern)\n2. Configura el proveedor de API y modelo que quieras usar\n3. Haz clic en <i>\"Save as Profile\"</i> en la sección de Connection Manager\n4. Ponle nombre a tu perfil (ej., \"Deepseek\", \"GLM 4.6\")\n\n<b>Perfiles recomendados:</b>\n• <b>Resumen:</b> Un modelo potente (¡la calidad importa!)\n• <b>Todo lo demás:</b> Modelos rápidos y económicos van bien",
+
+    "tutorial_query_limits_title": "Límites de Consulta - Control de Coherencia",
+    "tutorial_query_limits_content": "<b>Límites de Consulta</b> te ayudan a controlar costos de API y prevenir degradación del contexto.\n\n<b>Máximo de Capítulos por Consulta:</b>\nLimita cuántos capítulos se pueden consultar a la vez. Cuando la IA (o Memoria Activa) intenta consultar más capítulos que este límite, la solicitud es rechazada u omitida.\n\n• Por defecto: 3 capítulos\n• Pon 0 para ilimitado\n\n<i>¿Por qué usarlo?</i> Consultar muchos capítulos a la vez usa muchos tokens. Aunque muchos modelos dicen tener contexto de cientos de miles, el rendimiento real se degrada después de 16k-32k.\n\n<b>Máximo de Consultas de Memoria Activa:</b>\nLimita el número total de consultas que una sola operación de Memoria Activa puede hacer.\n\n• Por defecto: 0 (ilimitado)\n• Pon un número para limitar consultas\n\n<i>¿Por qué usarlo?</i> Memoria Activa le pide a la IA que genere consultas, lo cual a veces puede producir muchas solicitudes. Esto puede tomar mucho tiempo.\n\n<b>Consejo:</b> Empieza con los valores por defecto y ajusta según tu uso.",
+
+    "tutorial_inject_at_depth_title": "Inyectar a Profundidad - La Forma Fácil",
+    "tutorial_inject_at_depth_content": "<b>Inyectar a Profundidad</b> automáticamente agrega tu línea temporal al contexto de la IA - ¡sin necesidad de editar prompts manualmente!\n\n<b>Qué hace:</b>\nEn lugar de agregar manualmente macros {{timeline}} a tus prompts, esta función inyecta la información de la línea temporal en una posición específica del historial de mensajes.\n\n<b>Cuándo usarlo:</b>\n• No quieres lidiar con prompts\n• Quieres activar/desactivar la línea temporal fácilmente\n\n<b>Inyectar vs Macros:</b>\n• <i>Inyectar:</i> Automático, funciona en todos lados, fácil de activar/desactivar\n• <i>Macros:</i> Manual, más control sobre la ubicación exacta (recomendado para usuarios avanzados)\n\nPara la mayoría de usuarios, <b>Inyectar a Profundidad es lo recomendado</b>.",
+
+    "tutorial_inject_setup_title": "Cómo Configurar Inyectar a Profundidad",
+    "tutorial_inject_setup_content": "<b>Para activar la inyección de línea temporal:</b>\n\n1. Activa <i>\"Habilitar Inyección de Línea Temporal\"</i>\n2. Pon la <i>Profundidad de Inyección</i> (0 = al final, mayor = más atrás en el historial)\n3. Elige el <i>Rol de Inyección</i> (System recomendado)\n4. La plantilla de prompt por defecto funciona bien en la mayoría de casos\n\n<b>La plantilla por defecto incluye:</b>\n• {{timeline}} - Tus resúmenes de capítulos\n• {{timelineResponses}} - Contexto recuperado de /timeline-fill\n• {{lastMessageId}} y {{firstIncludedMessageId}} - Info de posición\n\n<b>Profundidad explicada:</b>\n• Profundidad 0: Aparece después de todos los mensajes (más cerca de la respuesta de la IA)\n• Profundidad 1: Aparece antes del último mensaje\n• Profundidades mayores: Empuja la inyección más atrás\n\n<i>Recomendado:</i> Empieza con profundidad 0 o 1.",
+
+    "tutorial_arc_analyzer_title": "Buscador de Arcos - Creando Capítulos",
+    "tutorial_arc_analyzer_content": "<b>Buscador de Arcos</b> es la forma más fácil de crear capítulos. Escanea tu chat y sugiere puntos finales naturales para capítulos basándose en momentos clave de la historia.\n\n<b>Cómo usarlo:</b>\n1. Selecciona un <i>Perfil del Buscador de Arcos</i> (o usa el predeterminado)\n2. Haz clic en <i>\"Analizar Arcos\"</i>\n3. Revisa los cortes de capítulo sugeridos\n4. Haz clic en cualquier arco para crear un capítulo que termine en ese punto\n\nLa IA entonces resumirá todo desde el inicio (o el último capítulo) hasta ese punto.\n\n<i>Consejo:</i> Usa un modelo rápido y barato para el análisis de arcos - no necesita ser tan inteligente como para los resúmenes.",
+
+    "tutorial_manual_chapter_title": "Crear Capítulos Manualmente",
+    "tutorial_manual_chapter_content": "También puedes terminar capítulos manualmente dando clic en el botón <b>⏹</b> en cualquier mensaje.\n\n<b>Cómo funciona:</b>\n1. Pon el cursor sobre cualquier mensaje en el chat\n2. Haz clic en el botón de detener (⏹) que aparece\n3. La IA resumirá todos los mensajes desde el final del capítulo anterior (o el inicio del chat) hasta ese mensaje\n\n<b>Cuándo usar manual vs Buscador de Arcos:</b>\n• <i>Buscador de Arcos:</i> Genial para ponerte al día en chats largos\n• <i>Manual:</i> Mejor para chats en curso donde ya sabes buenos puntos de corte\n\nEl botón solo aparece si <i>\"Terminar Capítulo\"</i> está activado en los ajustes de Botones de Mensaje.",
+
+    "tutorial_summaries_title": "Viendo y Editando Resúmenes",
+    "tutorial_summaries_content": "Tus resúmenes de capítulos aparecen en la sección de <i>Resúmenes</i>. Puedes:\n\n• <b>Editar</b> resúmenes dando clic directamente en el texto\n• <b>Expandir</b> con el botón de expandir para un editor más grande\n• <b>Guardar</b> tus cambios con el botón de Guardar\n\n<b>¿Por qué editar resúmenes?</b>\nLos resúmenes de la IA a veces omiten detalles importantes o incluyen cosas de más. Buenos resúmenes significan mejor recuerdo.\n\n<b>Consejos para buenos resúmenes:</b>\n• Enfócate en puntos clave de la trama y cambios de personajes\n• Incluye nombres, lugares y relaciones importantes\n• Mantenlos cortos pero informativos",
+
+    "tutorial_timeline_fill_title": "Memoria Activa - Recuperación Inteligente",
+    "tutorial_timeline_fill_content": "<b>Memoria Activa</b> automáticamente consulta tu historial de capítulos para obtener contexto relevante para la escena actual.\n\n<b>Cómo funciona:</b>\n1. La IA lee tu chat actual y los resúmenes de capítulos\n2. Identifica qué información pasada es relevante\n3. Consulta los capítulos apropiados y recupera detalles\n4. Los resultados aparecen en el contexto de la IA vía {{timelineResponses}}\n\n<b>Usando los Botones Rápidos:</b>\nBusca estos botones en la barra inferior (cerca del botón de enviar):\n\n• <b>💬 Burbuja de chat</b> (comment-dots) - <i>Recuperar y Enviar</i>\n  Recupera contexto de la línea temporal, luego envía tu mensaje\n\n• <b>🔄 Rueda de reciclaje</b> (rotate) - <i>Recuperar para Swipe</i>\n  Recupera contexto de la línea temporal, luego regenera la última respuesta\n\n¡Los resultados persisten incluso después de que el mensaje termine de generarse! Los swipes automáticamente mantienen la información recuperada, incluso si no usas 'Recuperar para Swipe'.\n\n<i>Con Inyectar a Profundidad activado, el contexto recuperado aparece automáticamente.</i>",
+
+    "tutorial_presets_title": "Preajustes - Guarda tus Configuraciones",
+    "tutorial_presets_content": "<b>Preajustes</b> te permiten guardar y cambiar entre diferentes configuraciones de prompts.\n\n<b>Tipos de preajustes:</b>\n• <b>Resumen:</b> Prompts para crear resúmenes de capítulos\n• <b>Consulta:</b> Prompts para responder preguntas sobre capítulos\n• <b>Memoria Activa:</b> Prompts para recuperación de contexto\n• <b>Buscador de Arcos:</b> Prompts para detectar arcos de historia\n\n<b>Administrando preajustes:</b>\n• <i>Guardar:</i> Crea un nuevo preajuste con los ajustes actuales\n• <i>Actualizar:</i> Sobrescribe el preajuste seleccionado\n• <i>Eliminar:</i> Borra el preajuste seleccionado\n• <i>Exportar/Importar:</i> Comparte preajustes como archivos JSON\n\n<b>Consejo:</b> ¡Usa \"Exportar Todo\" para respaldar toda tu configuración!",
+
+    "tutorial_lore_manager_intro_title": "Modo Administrador de Historia - Resumen",
+    "tutorial_lore_manager_intro_content": "<b>Modo Administrador de Historia</b> es una función avanzada que permite a la IA actualizar automáticamente el Libro de Historia de tu personaje basándose en eventos de la historia.\n\n<b>Qué hace:</b>\nLa IA lee tu historia, identifica información importante (personajes, lugares, eventos, relaciones), y crea/actualiza entradas del Libro de Historia automáticamente.\n\n<b>Casos de uso:</b>\n• Llevar registro de OCs y NPCs\n• Guardar descripciones de lugares\n• Seguir el desarrollo de relaciones\n• Mantener consistencia en la historia\n\n<b>Requisitos:</b>\n• Un personaje con un Libro de Historia asignado\n• Un modelo de IA capaz y agéntico (GLM 4.6, Kimi, Claude (pon esfuerzo en 'auto!'), Grok 4 fast, etc)\n• Un perfil de Administración de Historia correctamente configurado\n\n<i>Esto es poderoso pero requiere configuración. Los siguientes pasos explican cómo.</i>",
+
+    "tutorial_lore_manager_setup_title": "Cómo Configurar el Administrador de Historia",
+    "tutorial_lore_manager_setup_content": "<b>Para usar el Modo Administrador de Historia:</b>\n\n1. <b>Crea un Perfil de Administración de Historia:</b>\n   • Usa un modelo potente\n   • El modelo necesita soportar llamadas de función/herramientas\n\n2. <b>Selecciona el perfil</b> en la sección de Administración de Historia\n\n3. <b>Asegúrate de que tu personaje tenga un Libro de Historia asignado</b>\n\n4. <b>(Opcional) Importa un preajuste de Chat Completion</b> optimizado para administración de historia:\n   <a href=\"https://raw.githubusercontent.com/unkarelian/timeline-extension-prompts/refs/heads/master/Lore%20Management.json\" target=\"_blank\">Descargar Preajuste</a>\n   (Importa vía los ajustes de Chat Completion de SillyTavern)\n\n<b>Ejecutando Administración de Historia:</b>\n1. Activa \"Modo Administrador de Historia\"\n2. Haz clic en \"Ejecutar Administración de Historia\"\n3. La IA analizará tu historia y editará el Libro de Historia\n4. Cuando termine, señalará que completó automáticamente",
+
+    "tutorial_lore_manager_details_title": "Cómo Funciona el Administrador de Historia",
+    "tutorial_lore_manager_details_content": "<b>Detrás de escenas:</b>\n\nCuando ejecutas Administración de Historia:\n1. Tu chat actual se oculta temporalmente\n2. La IA recibe herramientas de administración de historia\n3. Puede: <i>listar entradas</i>, <i>crear entradas</i>, <i>actualizar entradas</i>, <i>eliminar entradas</i>\n4. Cuando termina, llama a <i>end_lore_management</i>\n5. El chat se restaura y los cambios se guardan\n\n<b>La IA puede:</b>\n• Crear nuevas entradas del Libro de Historia con palabras clave\n• Actualizar entradas existentes con nueva información\n• Configurar entradas como \"constantes\" (siempre activas) o activadas por palabras clave\n\n<b>Funciones de seguridad:</b>\n• El chat original se preserva\n• La sesión se puede abortar si es necesario\n• Los cambios al Libro de Historia se guardan inmediatamente\n\n<i>Consejo:</i> Revisa las entradas del Libro de Historia después de que la IA termine para asegurar calidad.",
+
+    "tutorial_commands_reference_title": "Comandos Disponibles",
+    "tutorial_commands_reference_content": "<b>Botones Rápidos (Barra Inferior):</b>\n• 💬 <b>Recuperar y Enviar</b> - Envía con contexto de línea temporal\n• 🔄 <b>Recuperar y Swipe</b> - Regenera con contexto de línea temporal\n\n<b>Comandos Slash:</b>\n\n<b>Gestión de Capítulos:</b>\n• <code>/chapter-end</code> - Termina capítulo en el mensaje actual\n• <code>/timeline-undo</code> - Elimina el último marcador de capítulo\n\n<b>Consultas:</b>\n• <code>/timeline-query chapter=N [pregunta]</code> - Consulta un capítulo\n• <code>/timeline-query-chapters start=N end=M [pregunta]</code> - Consulta rango\n• <code>/chapter-summary N</code> - Obtiene resumen del capítulo N\n• <code>/resummarize chapter=N</code> - Re-resume un capítulo\n\n<b>Avanzado:</b>\n• <code>/timeline-fill</code> - Recuperación manual de contexto\n• <code>/arc-analyze</code> - Abre Buscador de Arcos\n• <code>/remove-reasoning N-M</code> - Elimina bloques de razonamiento",
+
+    "tutorial_complete_title": "¡Todo Listo!",
+    "tutorial_complete_content": "¡Felicidades! Ahora sabes todo sobre Timeline Memory.\n\n<b>Lista de Inicio Rápido:</b>\n☐ Crea perfiles de conexión para tus proveedores de IA\n☐ Activa \"Inyectar a Profundidad\" para contexto automático de línea temporal\n☐ Crea algunos capítulos usando el Buscador de Arcos o los botones manuales\n☐ (Opcional) Configura el Administrador de Historia para actualizaciones automáticas del Libro de Historia\n\n<b>Funciones Clave:</b>\n• <b>Buscador de Arcos</b> - Sugerencias automáticas de capítulos\n• <b>Inyectar a Profundidad</b> - Inyección automática de línea temporal\n• <b>Administrador de Historia</b> - Actualizaciones automáticas del Libro de Historia\n• <b>Importar/Exportar</b> - Fácil compartir configuraciones\n\n<b>¿Necesitas ayuda?</b>\nPuedes reiniciar este tutorial en cualquier momento desde el panel de configuración.\n\n<i>¡Feliz escritura!</i>",
+
+    "tutorial_btn_back": "Atrás",
+    "tutorial_btn_next": "Siguiente",
+    "tutorial_btn_finish": "Terminar",
+
+    "rmr_extension_name": "Archivo Temporal",
+    "rmr_general_settings": "Configuración General",
+    "rmr_start_tutorial": "Iniciar Tutorial",
+    "rmr_enable_tools": "Habilitar Llamadas de Herramientas/Funciones para Consultas de Capítulos",
+    "rmr_configuration": "Configuración:",
+    "rmr_export_all": "Exportar Todo",
+    "rmr_import_all": "Importar Todo",
+
+    "rmr_lore_management": "Administración de Historia",
+    "rmr_enable_lore_management": "Habilitar Modo Administrador de Historia",
+    "rmr_lore_management_profile": "Perfil de Administración de Historia",
+    "rmr_select_profile": "-- Seleccionar Perfil --",
+    "rmr_run_lore_management": "Ejecutar Administración de Historia",
+    "rmr_lore_management_prompt_label": "Prompt de Administración de Historia",
+    "rmr_lore_management_placeholder": "iniciar recuperación de historia",
+
+    "rmr_arc_analyzer": "Buscador de Arcos",
+    "rmr_arc_analyzer_profile": "Perfil del Buscador de Arcos",
+    "rmr_no_override": "-- Sin Sobreescritura --",
+    "rmr_analyze_arcs": "Analizar Arcos",
+    "rmr_arc_analyzer_preset": "Preajuste del Buscador de Arcos",
+    "rmr_custom": "-- Personalizado --",
+    "rmr_save": "Guardar",
+    "rmr_update": "Actualizar",
+    "rmr_delete": "Eliminar",
+    "rmr_export": "Exportar",
+    "rmr_import": "Importar",
+    "rmr_arc_system_prompt": "Prompt de Sistema del Buscador de Arcos",
+    "rmr_arc_system_placeholder": "Instrucciones a nivel de sistema para análisis de arcos (opcional)",
+    "rmr_arc_user_prompt": "Prompt de Usuario del Buscador de Arcos",
+
+    "rmr_message_buttons": "Botones de Mensaje",
+    "rmr_end_chapter": "Terminar Capítulo",
+
+    "rmr_summaries": "Resúmenes",
+    "rmr_no_chapters": "No hay capítulos en el chat actual. Termina un capítulo para crear un resumen.",
+    "rmr_chapter": "Capítulo",
+    "rmr_enter_summary": "Ingresa el resumen del capítulo...",
+    "rmr_cancel": "Cancelar",
+
+    "rmr_api_profiles": "Perfiles de Conexión API",
+    "rmr_summarization_profile": "Perfil de Resumen",
+    "rmr_chapter_query_profile": "Perfil de Consulta de Capítulos",
+    "rmr_timeline_fill_profile": "Perfil de Memoria Activa",
+    "rmr_max_requests": "Máx. Solicitudes por Minuto",
+    "rmr_max_chapters_query": "Máx. Capítulos por Consulta",
+    "rmr_max_timeline_queries": "Máx. Consultas de Memoria Activa",
+
+    "rmr_presets": "Preajustes",
+    "rmr_summarization_preset": "Preajuste de Resumen",
+    "rmr_query_preset": "Preajuste de Consulta",
+    "rmr_timeline_fill_preset": "Preajuste de Memoria Activa",
+
+    "rmr_prompts": "Prompts",
+    "rmr_chapter_summary_system": "Prompt de Sistema para Resumen de Capítulos",
+    "rmr_summary_system_placeholder": "Instrucciones a nivel de sistema para resumen (opcional)",
+    "rmr_chapter_summary_user": "Prompt de Usuario para Resumen de Capítulos",
+    "rmr_chapter_query_system": "Prompt de Sistema para Consulta de Capítulos",
+    "rmr_query_system_placeholder": "Instrucciones a nivel de sistema para consultas de capítulos (opcional)",
+    "rmr_chapter_query_user": "Prompt de Usuario para Consulta de Capítulos",
+    "rmr_timeline_fill_system": "Prompt de Sistema de Memoria Activa",
+    "rmr_timeline_fill_system_placeholder": "Instrucciones a nivel de sistema para memoria activa (opcional)",
+    "rmr_timeline_fill_user": "Prompt de Usuario de Memoria Activa",
+
+    "rmr_chapter_settings": "Configuración de Capítulos",
+    "rmr_hide_summarized": "Ocultar Mensajes Resumidos",
+    "rmr_add_chunk_summaries": "Agregar resúmenes de fragmentos (cuando hay más de uno) como comentario",
+
+    "rmr_inject_at_depth": "Inyectar a Profundidad",
+    "rmr_enable_injection": "Habilitar Inyección de Línea Temporal",
+    "rmr_injection_depth": "Profundidad de Inyección",
+    "rmr_injection_role": "Rol de Inyección",
+    "rmr_injection_prompt": "Plantilla de Prompt de Inyección",
+    "rmr_injection_placeholder": "Prompt a inyectar a profundidad..."
+}

@@ -1,96 +1,96 @@
 <div class="rmr-extension-settings">
 	<div class="inline-drawer">
 		<div class="inline-drawer-toggle inline-drawer-header">
-			<b>Timeline Memory</b>
+			<b data-i18n="rmr_extension_name">Timeline Memory</b>
 			<div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
 		</div>
 		<div class="inline-drawer-content">
-			<h4>General Settings</h4>
+			<h4 data-i18n="rmr_general_settings">General Settings</h4>
 			<div class="rmr-extension_block">
 				<div class="flex-container" style="gap: 10px; margin-bottom: 10px;">
 					<button type="button" class="menu_button" id="rmr_start_tutorial">
-						<i class="fa-solid fa-graduation-cap"></i> Start Tutorial
+						<i class="fa-solid fa-graduation-cap"></i> <span data-i18n="rmr_start_tutorial">Start Tutorial</span>
 					</button>
 				</div>
 				<label class="checkbox_label" for="rmr_tools_enabled">
 					<input id="rmr_tools_enabled" class="checkbox" type="checkbox" />
-					Enable Tool/Function Calls for Chapter Queries
+					<span data-i18n="rmr_enable_tools">Enable Tool/Function Calls for Chapter Queries</span>
 				</label>
 			</div>
 			<div class="rmr-extension_block">
 				<div class="master-export-import">
-					<span class="master-label">Configuration:</span>
+					<span class="master-label" data-i18n="rmr_configuration">Configuration:</span>
 					<button type="button" class="menu_button" id="rmr_master_export">
-						<i class="fa-solid fa-file-export"></i> Export All
+						<i class="fa-solid fa-file-export"></i> <span data-i18n="rmr_export_all">Export All</span>
 					</button>
 					<button type="button" class="menu_button" id="rmr_master_import">
-						<i class="fa-solid fa-file-import"></i> Import All
+						<i class="fa-solid fa-file-import"></i> <span data-i18n="rmr_import_all">Import All</span>
 					</button>
 				</div>
 			</div>
 			<hr>
-			<h4>Lore Management</h4>
+			<h4 data-i18n="rmr_lore_management">Lore Management</h4>
 			<div class="rmr-extension_block">
 				<label class="checkbox_label" for="rmr_lore_management_enabled">
 					<input id="rmr_lore_management_enabled" class="checkbox" type="checkbox" />
-					Enable Lore Management Mode
+					<span data-i18n="rmr_enable_lore_management">Enable Lore Management Mode</span>
 				</label>
 			</div>
 			<div class="rmr-extension_block">
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_lore_management_profile">
-							<small>Lore Management Profile</small>
+							<small data-i18n="rmr_lore_management_profile">Lore Management Profile</small>
 						</label>
 						<select class="text_pole widthNatural" id="rmr_lore_management_profile">
-							<option value="">-- Select Profile --</option>
+							<option value="" data-i18n="rmr_select_profile">-- Select Profile --</option>
 						</select>
 					</div>
 					<div class="flex-container flex0 flexFlowColumn" style="align-items:flex-end;justify-content:flex-end;gap:6px;">
-						<button type="button" class="menu_button" id="rmr_run_lore_manage">Run Lore Management</button>
+						<button type="button" class="menu_button" id="rmr_run_lore_manage" data-i18n="rmr_run_lore_management">Run Lore Management</button>
 					</div>
 				</div>
 				<div class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_lore_management_prompt">
-						<small>Lore Management Prompt</small>
+						<small data-i18n="rmr_lore_management_prompt_label">Lore Management Prompt</small>
 					</label>
-					<textarea placeholder="begin lore retrieval" rows="2" class="margin0 text_pole textarea_compact" id="rmr_lore_management_prompt"></textarea>
+					<textarea data-i18n="[placeholder]rmr_lore_management_placeholder" placeholder="begin lore retrieval" rows="2" class="margin0 text_pole textarea_compact" id="rmr_lore_management_prompt"></textarea>
 				</div>
 			</div>
 			<hr>
-			<h4>Arc Analyzer</h4>
+			<h4 data-i18n="rmr_arc_analyzer">Arc Analyzer</h4>
 			<div class="rmr-extension_block">
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_arc_profile">
-							<small>Arc Analyzer Profile</small>
+							<small data-i18n="rmr_arc_analyzer_profile">Arc Analyzer Profile</small>
 						</label>
 						<select class="text_pole widthNatural" id="rmr_arc_profile">
-							<option value="">-- No Override --</option>
+							<option value="" data-i18n="rmr_no_override">-- No Override --</option>
 						</select>
 					</div>
 					<div class="flex-container flex0 flexFlowColumn" style="align-items:flex-end;justify-content:flex-end;gap:6px;">
-						<button type="button" class="menu_button" id="rmr_run_arc_analyzer">Analyze Arcs</button>
+						<button type="button" class="menu_button" id="rmr_run_arc_analyzer" data-i18n="rmr_analyze_arcs">Analyze Arcs</button>
 					</div>
 				</div>
 
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_arc_preset">
-							<small>Arc Analyzer Preset</small>
+							<small data-i18n="rmr_arc_analyzer_preset">Arc Analyzer Preset</small>
 						</label>
 						<div class="preset-row">
 							<select class="text_pole widthNatural" id="rmr_arc_preset">
-								<option value="">-- Custom --</option>
+								<option value="" data-i18n="rmr_custom">-- Custom --</option>
 							</select>
 							<div class="preset-buttons">
-								<button type="button" class="menu_button" id="rmr_save_arc_preset">Save</button>
-								<button type="button" class="menu_button" id="rmr_update_arc_preset">Update</button>
-								<button type="button" class="menu_button" id="rmr_delete_arc_preset">Delete</button>
+								<button type="button" class="menu_button" id="rmr_save_arc_preset" data-i18n="rmr_save">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_arc_preset" data-i18n="rmr_update">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_arc_preset" data-i18n="rmr_delete">Delete</button>
 							</div>
 							<div class="preset-import-export">
-								<button type="button" class="menu_button small" id="rmr_export_arc_preset">Export</button>
-								<button type="button" class="menu_button small" id="rmr_import_arc_preset">Import</button>
+								<button type="button" class="menu_button small" id="rmr_export_arc_preset" data-i18n="rmr_export">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_arc_preset" data-i18n="rmr_import">Import</button>
 							</div>
 						</div>
 					</div>
@@ -99,235 +99,235 @@
 				<div class="rmr-extension_block flex-container flexFlowColumn">
 					<div title="System prompt for arc analysis." class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_arc_analyzer_system_prompt">
-							<small>Arc Analyzer System Prompt</small>
+							<small data-i18n="rmr_arc_system_prompt">Arc Analyzer System Prompt</small>
 						</label>
-						<textarea placeholder="System-level instructions for arc analysis (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_arc_analyzer_system_prompt"></textarea>
+						<textarea data-i18n="[placeholder]rmr_arc_system_placeholder" placeholder="System-level instructions for arc analysis (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_arc_analyzer_system_prompt"></textarea>
 					</div>
 					<div title="The prompt used to analyze the chat for arcs. Supports {{chapterHistory}}." class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_arc_analyzer_prompt_template">
-							<small>Arc Analyzer User Prompt</small>
+							<small data-i18n="rmr_arc_user_prompt">Arc Analyzer User Prompt</small>
 						</label>
 						<textarea placeholder="" rows="6" class="margin0 text_pole textarea_compact" id="rmr_arc_analyzer_prompt_template"></textarea>
 					</div>
 				</div>
 			<hr>
-			<h4>Message Buttons</h4>
+			<h4 data-i18n="rmr_message_buttons">Message Buttons</h4>
 			<div class="rmr-extension_block">
 				<label class="checkbox_label" for="rmr_chapter_button">
 					<span class="rmr-button fa-solid fa-fw fa-circle-stop"></span>
 					<input id="rmr_chapter_button" class="checkbox" type="checkbox" />
-					End Chapter
+					<span data-i18n="rmr_end_chapter">End Chapter</span>
 				</label>
 			</div>
 			<hr>
-			<h4><i class="fa-solid fa-book"></i> Summaries</h4>
+			<h4><i class="fa-solid fa-book"></i> <span data-i18n="rmr_summaries">Summaries</span></h4>
 			<div class="rmr-extension_block">
 				<div id="rmr_summaries_container" class="rmr-summaries-container">
-					<div class="rmr-summaries-empty">No chapters in current chat. End a chapter to create a summary.</div>
+					<div class="rmr-summaries-empty" data-i18n="rmr_no_chapters">No chapters in current chat. End a chapter to create a summary.</div>
 				</div>
 			</div>
 			<!-- Fullscreen Summary Popup -->
 			<div id="rmr_summary_popup" class="rmr-summary-popup-overlay" style="display: none;">
 				<div class="rmr-summary-popup">
 					<div class="rmr-summary-popup-header">
-						<span class="rmr-summary-popup-title">Chapter <span id="rmr_popup_chapter_num"></span></span>
+						<span class="rmr-summary-popup-title"><span data-i18n="rmr_chapter">Chapter</span> <span id="rmr_popup_chapter_num"></span></span>
 						<span class="rmr-summary-popup-range" id="rmr_popup_range"></span>
 						<button type="button" class="rmr-summary-popup-close" id="rmr_popup_close">
 							<i class="fa-solid fa-xmark"></i>
 						</button>
 					</div>
 					<div class="rmr-summary-popup-body">
-						<textarea id="rmr_popup_textarea" class="rmr-summary-popup-textarea text_pole" placeholder="Enter chapter summary..."></textarea>
+						<textarea id="rmr_popup_textarea" class="rmr-summary-popup-textarea text_pole" data-i18n="[placeholder]rmr_enter_summary" placeholder="Enter chapter summary..."></textarea>
 					</div>
 					<div class="rmr-summary-popup-footer">
-						<button type="button" class="menu_button" id="rmr_popup_cancel">Cancel</button>
-						<button type="button" class="menu_button" id="rmr_popup_save" disabled>Save</button>
+						<button type="button" class="menu_button" id="rmr_popup_cancel" data-i18n="rmr_cancel">Cancel</button>
+						<button type="button" class="menu_button" id="rmr_popup_save" disabled data-i18n="rmr_save">Save</button>
 					</div>
 				</div>
 			</div>
 			<hr>
-			<h4>API Connection Profiles</h4>
+			<h4 data-i18n="rmr_api_profiles">API Connection Profiles</h4>
 			<div class="rmr-extension_block">
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_profile">
-							<small>Summarization Profile</small>
+							<small data-i18n="rmr_summarization_profile">Summarization Profile</small>
 						</label>
 						<select class="text_pole widthNatural" id="rmr_profile">
-							<option value="">-- No Override --</option>
+							<option value="" data-i18n="rmr_no_override">-- No Override --</option>
 						</select>
 					</div>
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_query_profile">
-							<small>Chapter Query Profile</small>
+							<small data-i18n="rmr_chapter_query_profile">Chapter Query Profile</small>
 						</label>
 						<select class="text_pole widthNatural" id="rmr_query_profile">
 						</select>
 					</div>
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_timeline_fill_profile">
-							<small>Timeline Fill Profile</small>
+							<small data-i18n="rmr_timeline_fill_profile">Timeline Fill Profile</small>
 						</label>
 						<select class="text_pole widthNatural" id="rmr_timeline_fill_profile">
-							<option value="">-- No Override --</option>
+							<option value="" data-i18n="rmr_no_override">-- No Override --</option>
 						</select>
 					</div>
 				</div>
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_rate_limit">
-							<small>Max Requests per Minute</small>
+							<small data-i18n="rmr_max_requests">Max Requests per Minute</small>
 						</label>
 						<input class="text_pole widthNatural" id="rmr_rate_limit" type="number">
 					</div>
 					<div class="flex-container flex1 flexFlowColumn" title="Maximum number of chapters that can be queried at once. Set to 0 for unlimited.">
 						<label for="rmr_query_chapter_limit">
-							<small>Max Chapters per Query</small>
+							<small data-i18n="rmr_max_chapters_query">Max Chapters per Query</small>
 						</label>
 						<input class="text_pole widthNatural" id="rmr_query_chapter_limit" type="number" min="0">
 					</div>
 					<div class="flex-container flex1 flexFlowColumn" title="Maximum number of queries a timeline fill can make. Set to 0 for unlimited.">
 						<label for="rmr_timeline_fill_query_limit">
-							<small>Max Timeline Fill Queries</small>
+							<small data-i18n="rmr_max_timeline_queries">Max Timeline Fill Queries</small>
 						</label>
 						<input class="text_pole widthNatural" id="rmr_timeline_fill_query_limit" type="number" min="0">
 					</div>
 				</div>
 			</div>
 			<hr>
-			<h4>Presets</h4>
+			<h4 data-i18n="rmr_presets">Presets</h4>
 			<div class="rmr-extension_block">
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_summarize_preset">
-							<small>Summarization Preset</small>
+							<small data-i18n="rmr_summarization_preset">Summarization Preset</small>
 						</label>
 						<div class="preset-row">
 							<select class="text_pole widthNatural" id="rmr_summarize_preset">
-								<option value="">-- Custom --</option>
+								<option value="" data-i18n="rmr_custom">-- Custom --</option>
 							</select>
 							<div class="preset-buttons">
-								<button type="button" class="menu_button" id="rmr_save_summarize_preset">Save</button>
-								<button type="button" class="menu_button" id="rmr_update_summarize_preset">Update</button>
-								<button type="button" class="menu_button" id="rmr_delete_summarize_preset">Delete</button>
+								<button type="button" class="menu_button" id="rmr_save_summarize_preset" data-i18n="rmr_save">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_summarize_preset" data-i18n="rmr_update">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_summarize_preset" data-i18n="rmr_delete">Delete</button>
 							</div>
 							<div class="preset-import-export">
-								<button type="button" class="menu_button small" id="rmr_export_summarize_preset">Export</button>
-								<button type="button" class="menu_button small" id="rmr_import_summarize_preset">Import</button>
+								<button type="button" class="menu_button small" id="rmr_export_summarize_preset" data-i18n="rmr_export">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_summarize_preset" data-i18n="rmr_import">Import</button>
 							</div>
 						</div>
 					</div>
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_query_preset">
-							<small>Query Preset</small>
+							<small data-i18n="rmr_query_preset">Query Preset</small>
 						</label>
 						<div class="preset-row">
 							<select class="text_pole widthNatural" id="rmr_query_preset">
-								<option value="">-- Custom --</option>
+								<option value="" data-i18n="rmr_custom">-- Custom --</option>
 							</select>
 							<div class="preset-buttons">
-								<button type="button" class="menu_button" id="rmr_save_query_preset">Save</button>
-								<button type="button" class="menu_button" id="rmr_update_query_preset">Update</button>
-								<button type="button" class="menu_button" id="rmr_delete_query_preset">Delete</button>
+								<button type="button" class="menu_button" id="rmr_save_query_preset" data-i18n="rmr_save">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_query_preset" data-i18n="rmr_update">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_query_preset" data-i18n="rmr_delete">Delete</button>
 							</div>
 							<div class="preset-import-export">
-								<button type="button" class="menu_button small" id="rmr_export_query_preset">Export</button>
-								<button type="button" class="menu_button small" id="rmr_import_query_preset">Import</button>
+								<button type="button" class="menu_button small" id="rmr_export_query_preset" data-i18n="rmr_export">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_query_preset" data-i18n="rmr_import">Import</button>
 							</div>
 						</div>
 					</div>
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_timeline_fill_preset">
-							<small>Timeline Fill Preset</small>
+							<small data-i18n="rmr_timeline_fill_preset">Timeline Fill Preset</small>
 						</label>
 						<div class="preset-row">
 							<select class="text_pole widthNatural" id="rmr_timeline_fill_preset">
-								<option value="">-- Custom --</option>
+								<option value="" data-i18n="rmr_custom">-- Custom --</option>
 							</select>
 							<div class="preset-buttons">
-								<button type="button" class="menu_button" id="rmr_save_timeline_fill_preset">Save</button>
-								<button type="button" class="menu_button" id="rmr_update_timeline_fill_preset">Update</button>
-								<button type="button" class="menu_button" id="rmr_delete_timeline_fill_preset">Delete</button>
+								<button type="button" class="menu_button" id="rmr_save_timeline_fill_preset" data-i18n="rmr_save">Save</button>
+								<button type="button" class="menu_button" id="rmr_update_timeline_fill_preset" data-i18n="rmr_update">Update</button>
+								<button type="button" class="menu_button" id="rmr_delete_timeline_fill_preset" data-i18n="rmr_delete">Delete</button>
 							</div>
 							<div class="preset-import-export">
-								<button type="button" class="menu_button small" id="rmr_export_timeline_fill_preset">Export</button>
-								<button type="button" class="menu_button small" id="rmr_import_timeline_fill_preset">Import</button>
+								<button type="button" class="menu_button small" id="rmr_export_timeline_fill_preset" data-i18n="rmr_export">Export</button>
+								<button type="button" class="menu_button small" id="rmr_import_timeline_fill_preset" data-i18n="rmr_import">Import</button>
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 			<hr>
-			<h4>Prompts</h4>
+			<h4 data-i18n="rmr_prompts">Prompts</h4>
 			<div class="rmr-extension_block flex-container flexFlowColumn">
 				<div title="System prompt for chapter summarization." class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_memory_system_prompt">
-						<small>Chapter Summary System Prompt</small>
+						<small data-i18n="rmr_chapter_summary_system">Chapter Summary System Prompt</small>
 					</label>
-					<textarea placeholder="System-level instructions for summarization (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
+					<textarea data-i18n="[placeholder]rmr_summary_system_placeholder" placeholder="System-level instructions for summarization (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
 				</div>
 				<div title="The prompt appended to a section of message history when generating a summary." class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_memory_prompt_template">
-						<small>Chapter Summary User Prompt</small>
+						<small data-i18n="rmr_chapter_summary_user">Chapter Summary User Prompt</small>
 					</label>
 					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
 				</div>
 				<hr class="sysHR">
 				<div title="System prompt for chapter queries." class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_chapter_query_system_prompt">
-						<small>Chapter Query System Prompt</small>
+						<small data-i18n="rmr_chapter_query_system">Chapter Query System Prompt</small>
 					</label>
-					<textarea placeholder="System-level instructions for chapter queries (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_chapter_query_system_prompt"></textarea>
+					<textarea data-i18n="[placeholder]rmr_query_system_placeholder" placeholder="System-level instructions for chapter queries (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_chapter_query_system_prompt"></textarea>
 				</div>
 				<div title="The prompt used when querying a specific chapter with a question." class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_chapter_query_prompt_template">
-						<small>Chapter Query User Prompt</small>
+						<small data-i18n="rmr_chapter_query_user">Chapter Query User Prompt</small>
 					</label>
 					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_chapter_query_prompt_template"></textarea>
 				</div>
 				<hr class="sysHR">
 				<div title="System prompt for timeline fill generation." class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_timeline_fill_system_prompt">
-						<small>Timeline Fill System Prompt</small>
+						<small data-i18n="rmr_timeline_fill_system">Timeline Fill System Prompt</small>
 					</label>
-					<textarea placeholder="System-level instructions for timeline fill (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_timeline_fill_system_prompt"></textarea>
+					<textarea data-i18n="[placeholder]rmr_timeline_fill_system_placeholder" placeholder="System-level instructions for timeline fill (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_timeline_fill_system_prompt"></textarea>
 				</div>
 				<div title="The prompt the assistant should follow to propose timeline queries in JSON format." class="flex-container flex1 flexFlowColumn">
 					<label for="rmr_timeline_fill_prompt_template">
-						<small>Timeline Fill User Prompt</small>
+						<small data-i18n="rmr_timeline_fill_user">Timeline Fill User Prompt</small>
 					</label>
 					<textarea placeholder="" rows="5" class="margin0 text_pole textarea_compact" id="rmr_timeline_fill_prompt_template"></textarea>
 				</div>
 			</div>
 			<hr>
-			<h4>Chapter Settings</h4>
+			<h4 data-i18n="rmr_chapter_settings">Chapter Settings</h4>
 			<div class="rmr-extension_block">
 				<label class="checkbox_label" for="rmr_hide_chapter">
 					<input id="rmr_hide_chapter" class="checkbox" type="checkbox" />
-					Hide Summarized Messages
+					<span data-i18n="rmr_hide_summarized">Hide Summarized Messages</span>
 				</label>
 				<label class="checkbox_label" for="rmr_add_chunk_summaries">
 					<input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox" />
-					Add chunk summaries (when there are more than one) as comment
+					<span data-i18n="rmr_add_chunk_summaries">Add chunk summaries (when there are more than one) as comment</span>
 				</label>
 			</div>
 			<hr>
-			<h4>Inject at Depth</h4>
+			<h4 data-i18n="rmr_inject_at_depth">Inject at Depth</h4>
 			<div class="rmr-extension_block">
 				<label class="checkbox_label" for="rmr_inject_enabled">
 					<input id="rmr_inject_enabled" class="checkbox" type="checkbox" />
-					Enable Timeline Injection
+					<span data-i18n="rmr_enable_injection">Enable Timeline Injection</span>
 				</label>
 				<div class="flex-container marginTopBot5">
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_inject_depth">
-							<small>Injection Depth</small>
+							<small data-i18n="rmr_injection_depth">Injection Depth</small>
 						</label>
 						<input class="text_pole widthUnset" id="rmr_inject_depth" type="number" min="0" max="999" value="0" />
 					</div>
 					<div class="flex-container flex1 flexFlowColumn">
 						<label for="rmr_inject_role">
-							<small>Injection Role</small>
+							<small data-i18n="rmr_injection_role">Injection Role</small>
 						</label>
 						<select class="text_pole widthNatural" id="rmr_inject_role">
 						</select>
@@ -335,9 +335,9 @@
 				</div>
 				<div class="flex-container flex1 flexFlowColumn marginTopBot5">
 					<label for="rmr_inject_prompt">
-						<small>Injection Prompt Template</small>
+						<small data-i18n="rmr_injection_prompt">Injection Prompt Template</small>
 					</label>
-					<textarea placeholder="Prompt to inject at depth..." rows="8" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
+					<textarea data-i18n="[placeholder]rmr_injection_placeholder" placeholder="Prompt to inject at depth..." rows="8" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
 				</div>
 			</div>
 			<hr>

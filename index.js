@@ -5,6 +5,7 @@ import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
 import { loadSettings, changeCharaName, renderSummariesList } from "./src/settings.js";
 import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection } from "./src/memories.js";
 import { showRetrievalProgress, hideRetrievalProgress } from "./src/retrieval-progress.js";
+import { loadUITranslations } from "./src/locales.js";
 
 export const extension_name = 'timeline-memory';
 
@@ -113,6 +114,8 @@ jQuery(async () => {
 	STVersion = await res.json();
 	if (checkVersion(STVersion)===true) {
 		eventSource.on(event_types.APP_READY, async () => {
+			// Load UI translations before settings panel
+			await loadUITranslations();
 			loadSettings();
 			initTimelineMacro();
 			loadSlashCommands();

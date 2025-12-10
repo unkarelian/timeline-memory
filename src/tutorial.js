@@ -1,19 +1,25 @@
+import { loadTutorialTranslations, getTutorialText } from './locales.js';
+
 const TUTORIAL_VERSION = 3;
 const STORAGE_KEY = 'timeline-memory-tutorial-completed';
 
-// Tutorial step definitions
+// Tutorial step definitions with translation keys and English defaults
 const tutorialSteps = [
     {
         id: 'welcome',
-        title: 'Welcome to Timeline Memory',
-        content: `Timeline Memory is a system made for accurate recall of long stories. It can seem complex, but with this tutorial, we'll walk you through how it works.
+        titleKey: 'tutorial_welcome_title',
+        titleDefault: 'Welcome to Timeline Memory',
+        contentKey: 'tutorial_welcome_content',
+        contentDefault: `Timeline Memory is a system made for accurate recall of long stories. It can seem complex, but with this tutorial, we'll walk you through how it works.
 
 <i>Tip:</i> You can drag this popup around and navigate with the buttons below. You can also scroll!`
     },
     {
         id: 'connection-profiles',
-        title: 'Creating Connection Profiles',
-        content: `Timeline Memory uses <b>Connection Profiles</b> from the Connection Manager extension to make API calls.
+        titleKey: 'tutorial_connection_profiles_title',
+        titleDefault: 'Creating Connection Profiles',
+        contentKey: 'tutorial_connection_profiles_content',
+        contentDefault: `Timeline Memory uses <b>Connection Profiles</b> from the Connection Manager extension to make API calls.
 
 <b>What are Connection Profiles?</b>
 Profiles let you save different API configurations (provider, model, settings) and switch between them. This extension uses profiles to call different models for different tasks.
@@ -31,8 +37,10 @@ Profiles let you save different API configurations (provider, model, settings) a
     },
     {
         id: 'query-limits',
-        title: 'Query Limits - Coherency Control',
-        content: `<b>Query Limits</b> help you control API costs and prevent context rot.
+        titleKey: 'tutorial_query_limits_title',
+        titleDefault: 'Query Limits - Coherency Control',
+        contentKey: 'tutorial_query_limits_content',
+        contentDefault: `<b>Query Limits</b> help you control API costs and prevent context rot.
 
 <b>Max Chapters per Query:</b>
 Limits how many chapters can be queried at once. When the AI (or Timeline Fill) tries to query more chapters than this limit, the request is rejected or skipped.
@@ -55,8 +63,10 @@ Limits the total number of queries a single Timeline Fill operation can make.
     },
     {
         id: 'inject-at-depth',
-        title: 'Inject at Depth - The Easy Way',
-        content: `<b>Inject at Depth</b> automatically adds your timeline to the AI's context - no manual prompt editing needed!
+        titleKey: 'tutorial_inject_at_depth_title',
+        titleDefault: 'Inject at Depth - The Easy Way',
+        contentKey: 'tutorial_inject_at_depth_content',
+        contentDefault: `<b>Inject at Depth</b> automatically adds your timeline to the AI's context - no manual prompt editing needed!
 
 <b>What it does:</b>
 Instead of manually adding {{timeline}} macros to your prompts, this feature injects the timeline information at a specific position in the message history.
@@ -74,8 +84,10 @@ For most users, <b>Inject at Depth is recommended</b>.`,
     },
     {
         id: 'inject-setup',
-        title: 'Setting Up Inject at Depth',
-        content: `<b>To enable timeline injection:</b>
+        titleKey: 'tutorial_inject_setup_title',
+        titleDefault: 'Setting Up Inject at Depth',
+        contentKey: 'tutorial_inject_setup_content',
+        contentDefault: `<b>To enable timeline injection:</b>
 
 1. Check <i>"Enable Timeline Injection"</i>
 2. Set <i>Injection Depth</i> (0 = at the end, higher = further back in history)
@@ -97,8 +109,10 @@ For most users, <b>Inject at Depth is recommended</b>.`,
     },
     {
         id: 'arc-analyzer',
-        title: 'Arc Analyzer - Creating Chapters',
-        content: `<b>Arc Analyzer</b> is the easiest way to create chapters. It scans your chat and suggests natural chapter endpoints based on story beats.
+        titleKey: 'tutorial_arc_analyzer_title',
+        titleDefault: 'Arc Analyzer - Creating Chapters',
+        contentKey: 'tutorial_arc_analyzer_content',
+        contentDefault: `<b>Arc Analyzer</b> is the easiest way to create chapters. It scans your chat and suggests natural chapter endpoints based on story beats.
 
 <b>How to use it:</b>
 1. Select an <i>Arc Analyzer Profile</i> (or use default)
@@ -113,8 +127,10 @@ The AI will then summarize everything from the start (or last chapter) to that p
     },
     {
         id: 'manual-chapter',
-        title: 'Manual Chapter Creation',
-        content: `You can also manually end chapters by clicking the <b>⏹</b> button on any message.
+        titleKey: 'tutorial_manual_chapter_title',
+        titleDefault: 'Manual Chapter Creation',
+        contentKey: 'tutorial_manual_chapter_content',
+        contentDefault: `You can also manually end chapters by clicking the <b>⏹</b> button on any message.
 
 <b>How it works:</b>
 1. Hover over any message in the chat
@@ -129,8 +145,10 @@ The button only appears if <i>"End Chapter"</i> is enabled in Message Buttons se
     },
     {
         id: 'summaries',
-        title: 'Viewing & Editing Summaries',
-        content: `Your chapter summaries appear in the <i>Summaries</i> section. You can:
+        titleKey: 'tutorial_summaries_title',
+        titleDefault: 'Viewing & Editing Summaries',
+        contentKey: 'tutorial_summaries_content',
+        contentDefault: `Your chapter summaries appear in the <i>Summaries</i> section. You can:
 
 • <b>Edit</b> summaries by clicking the text directly
 • <b>Expand</b> using the expand button for a larger editor
@@ -147,8 +165,10 @@ The AI's summaries might miss important details or include unnecessary ones. Goo
     },
     {
         id: 'timeline-fill',
-        title: 'Timeline Fill - Smart Retrieval',
-        content: `<b>Timeline Fill</b> automatically queries your chapter history to gather relevant context for the current scene.
+        titleKey: 'tutorial_timeline_fill_title',
+        titleDefault: 'Timeline Fill - Smart Retrieval',
+        contentKey: 'tutorial_timeline_fill_content',
+        contentDefault: `<b>Timeline Fill</b> automatically queries your chapter history to gather relevant context for the current scene.
 
 <b>How it works:</b>
 1. The AI reads your current chat and chapter summaries
@@ -172,8 +192,10 @@ The results persist even after the message is done generating! Swipes automatica
     },
     {
         id: 'presets',
-        title: 'Presets - Save Your Configurations',
-        content: `<b>Presets</b> let you save and switch between different prompt configurations.
+        titleKey: 'tutorial_presets_title',
+        titleDefault: 'Presets - Save Your Configurations',
+        contentKey: 'tutorial_presets_content',
+        contentDefault: `<b>Presets</b> let you save and switch between different prompt configurations.
 
 <b>Preset types:</b>
 • <b>Summarization:</b> Prompts for creating chapter summaries
@@ -192,8 +214,10 @@ The results persist even after the message is done generating! Swipes automatica
     },
     {
         id: 'lore-management-intro',
-        title: 'Lore Manager Mode - Overview',
-        content: `<b>Lore Manager Mode</b> is an advanced feature that lets the AI automatically update your character's lorebook based on story events.
+        titleKey: 'tutorial_lore_manager_intro_title',
+        titleDefault: 'Lore Manager Mode - Overview',
+        contentKey: 'tutorial_lore_manager_intro_content',
+        contentDefault: `<b>Lore Manager Mode</b> is an advanced feature that lets the AI automatically update your character's lorebook based on story events.
 
 <b>What it does:</b>
 The AI reads your story, identifies important lore (characters, locations, events, relationships), and creates/updates lorebook entries automatically.
@@ -213,8 +237,10 @@ The AI reads your story, identifies important lore (characters, locations, event
     },
     {
         id: 'lore-management-setup',
-        title: 'Setting Up Lore Manager',
-        content: `<b>To use Lore Manager Mode:</b>
+        titleKey: 'tutorial_lore_manager_setup_title',
+        titleDefault: 'Setting Up Lore Manager',
+        contentKey: 'tutorial_lore_manager_setup_content',
+        contentDefault: `<b>To use Lore Manager Mode:</b>
 
 1. <b>Create a Lore Management Profile:</b>
    • Use a powerful model
@@ -237,8 +263,10 @@ The AI reads your story, identifies important lore (characters, locations, event
     },
     {
         id: 'lore-management-details',
-        title: 'How Lore Manager Works',
-        content: `<b>Behind the scenes:</b>
+        titleKey: 'tutorial_lore_manager_details_title',
+        titleDefault: 'How Lore Manager Works',
+        contentKey: 'tutorial_lore_manager_details_content',
+        contentDefault: `<b>Behind the scenes:</b>
 
 When you run Lore Management:
 1. Your current chat is temporarily hidden
@@ -261,8 +289,10 @@ When you run Lore Management:
     },
     {
         id: 'commands-reference',
-        title: 'Command Reference',
-        content: `<b>Quick Buttons (Bottom Bar):</b>
+        titleKey: 'tutorial_commands_reference_title',
+        titleDefault: 'Command Reference',
+        contentKey: 'tutorial_commands_reference_content',
+        contentDefault: `<b>Quick Buttons (Bottom Bar):</b>
 • 💬 <b>Retrieve and Send</b> - Send with timeline context
 • 🔄 <b>Retrieve and Swipe</b> - Regenerate with timeline context
 
@@ -285,8 +315,10 @@ When you run Lore Management:
     },
     {
         id: 'complete',
-        title: 'You\'re Ready!',
-        content: `Congratulations! You now know everything about Timeline Memory.
+        titleKey: 'tutorial_complete_title',
+        titleDefault: 'You\'re Ready!',
+        contentKey: 'tutorial_complete_content',
+        contentDefault: `Congratulations! You now know everything about Timeline Memory.
 
 <b>Quick Start Checklist:</b>
 ☐ Create connection profiles for your AI providers
@@ -313,9 +345,26 @@ let tutorialPopup = null;
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
 
+// Get translated text for a step
+function getStepTitle(step) {
+    return getTutorialText(step.titleKey, step.titleDefault);
+}
+
+function getStepContent(step) {
+    return getTutorialText(step.contentKey, step.contentDefault);
+}
+
+// Get translated button text
+function getButtonText(key, fallback) {
+    return getTutorialText(key, fallback);
+}
+
 // Start the tutorial
-export function startTutorial(fromStep = 0) {
+export async function startTutorial(fromStep = 0) {
     if (isActive) return;
+
+    // Load translations before starting
+    await loadTutorialTranslations();
 
     currentStep = fromStep;
     isActive = true;
@@ -342,6 +391,9 @@ export function endTutorial(completed = true) {
 function createPopup() {
     if (tutorialPopup) return;
 
+    const backText = getButtonText('tutorial_btn_back', 'Back');
+    const nextText = getButtonText('tutorial_btn_next', 'Next');
+
     tutorialPopup = document.createElement('div');
     tutorialPopup.id = 'rmr-tutorial-popup';
     tutorialPopup.innerHTML = `
@@ -355,10 +407,10 @@ function createPopup() {
         <div class="rmr-tutorial-body"></div>
         <div class="rmr-tutorial-footer">
             <button class="rmr-tutorial-btn rmr-tutorial-prev menu_button">
-                <i class="fa-solid fa-arrow-left"></i> Back
+                <i class="fa-solid fa-arrow-left"></i> ${backText}
             </button>
             <button class="rmr-tutorial-btn rmr-tutorial-next menu_button">
-                Next <i class="fa-solid fa-arrow-right"></i>
+                ${nextText} <i class="fa-solid fa-arrow-right"></i>
             </button>
         </div>
     `;
@@ -457,11 +509,11 @@ function showStep(stepIndex) {
 
     if (!tutorialPopup) return;
 
-    // Update content
-    tutorialPopup.querySelector('.rmr-tutorial-title').textContent = step.title;
+    // Update content with translations
+    tutorialPopup.querySelector('.rmr-tutorial-title').textContent = getStepTitle(step);
     tutorialPopup.querySelector('.rmr-tutorial-step-indicator').textContent =
         `${stepIndex + 1}/${tutorialSteps.length}`;
-    tutorialPopup.querySelector('.rmr-tutorial-body').innerHTML = step.content;
+    tutorialPopup.querySelector('.rmr-tutorial-body').innerHTML = getStepContent(step);
 
     // Update buttons
     const prevBtn = tutorialPopup.querySelector('.rmr-tutorial-prev');
@@ -470,9 +522,11 @@ function showStep(stepIndex) {
     prevBtn.style.visibility = stepIndex === 0 ? 'hidden' : 'visible';
 
     if (stepIndex === tutorialSteps.length - 1) {
-        nextBtn.innerHTML = 'Finish <i class="fa-solid fa-check"></i>';
+        const finishText = getButtonText('tutorial_btn_finish', 'Finish');
+        nextBtn.innerHTML = `${finishText} <i class="fa-solid fa-check"></i>`;
     } else {
-        nextBtn.innerHTML = 'Next <i class="fa-solid fa-arrow-right"></i>';
+        const nextText = getButtonText('tutorial_btn_next', 'Next');
+        nextBtn.innerHTML = `${nextText} <i class="fa-solid fa-arrow-right"></i>`;
     }
 
     // Handle highlighting
