@@ -299,6 +299,11 @@ NOTE: This is strictly for reference to past events. NEVER use an ID mentioned h
 	"lore_management_profile": null,
 	"lore_management_prompt": "begin lore retrieval",
 
+	// Agentic timeline fill settings
+	"agentic_timeline_fill_enabled": false,
+	"agentic_timeline_fill_profile": null,
+	"agentic_timeline_fill_prompt": "begin timeline retrieval",
+
 	// Inject at depth settings
 	"inject_enabled": false,
 	"inject_depth": 0,
@@ -384,6 +389,10 @@ function reloadProfiles() {
     if (loreManagementSelect?.length) {
         loreManagementSelect.not(':first').remove();
     }
+    const agenticTimelineFillSelect = $('#rmr_agentic_timeline_fill_profile');
+    if (agenticTimelineFillSelect?.length) {
+        agenticTimelineFillSelect.not(':first').remove();
+    }
     if (!extension_settings.connectionManager?.profiles) {
         if (timelineFillSelect?.length) {
             timelineFillSelect.val('');
@@ -393,6 +402,9 @@ function reloadProfiles() {
         }
         if (loreManagementSelect?.length) {
             loreManagementSelect.val('');
+        }
+        if (agenticTimelineFillSelect?.length) {
+            agenticTimelineFillSelect.val('');
         }
         return;
     }
@@ -431,6 +443,16 @@ function reloadProfiles() {
             );
             if (settings.lore_management_profile == profile.id) {
                 loreManagementSelect.val(profile.id);
+            }
+        }
+        if (agenticTimelineFillSelect?.length) {
+            agenticTimelineFillSelect.append(
+                $('<option></option>')
+                    .attr('value', profile.id)
+                    .text(profile.name)
+            );
+            if (settings.agentic_timeline_fill_profile == profile.id) {
+                agenticTimelineFillSelect.val(profile.id);
             }
         }
     }
@@ -696,6 +718,42 @@ async function loadSettingsUI() {
         }
     });
 
+    // Agentic timeline fill settings
+    $('#rmr_agentic_timeline_fill_enabled').prop('checked', settings.agentic_timeline_fill_enabled).on('click', toggleCheckboxSetting);
+    $('#rmr_agentic_timeline_fill_prompt').val(settings.agentic_timeline_fill_prompt).on('change', handleStringValueChange);
+
+    // Agentic timeline fill profile dropdown
+    const agenticTimelineFillProfileSelect = $('#rmr_agentic_timeline_fill_profile');
+    agenticTimelineFillProfileSelect.on('input', () => {
+        const profile = agenticTimelineFillProfileSelect.val();
+        if (!profile.length) {
+            settings.agentic_timeline_fill_profile = null;
+            getContext().saveSettingsDebounced();
+            return;
+        }
+        const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
+        if (profileID >= 0) {
+            settings.agentic_timeline_fill_profile = profile;
+            getContext().saveSettingsDebounced();
+        } else {
+            toastr.error("Non-existent profile selected.", "Timeline Memory");
+            agenticTimelineFillProfileSelect.val('');
+            settings.agentic_timeline_fill_profile = null;
+            getContext().saveSettingsDebounced();
+        }
+    });
+
+    // Wire the agentic timeline fill button
+    $('#rmr_run_agentic_timeline_fill').on('click', async () => {
+        try {
+            const { startAgenticTimelineFillSession } = await import('./agentic-timeline-fill.js');
+            await startAgenticTimelineFillSession();
+        } catch (err) {
+            console.error('Agentic Timeline Fill error:', err);
+            toastr.error('Failed to start Agentic Timeline Fill', 'Timeline Memory');
+        }
+    });
+
 	// load all numeric settings
 	$(`.rmr-extension_block input[type="number"]`).each((_i, elem) => {
 		const setting_key = elem.id.replace('rmr_', '');
@@ -708,6 +766,11 @@ async function loadSettingsUI() {
 		handleIntValueChange(e);
 		const { updateToolRegistration } = await import('./commands.js');
 		updateToolRegistration();
+		// Also re-register agentic tools if a session is active
+		const { isAgenticTimelineFillActive, registerAgenticTimelineTools } = await import('./agentic-timeline-fill.js');
+		if (isAgenticTimelineFillActive()) {
+			registerAgenticTimelineTools();
+		}
 	});
 	// load all text settings
 	$(`.rmr-extension_block textarea`).each((_i, elem) => {

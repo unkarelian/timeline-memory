@@ -11,6 +11,7 @@ import { oai_settings, openai_settings, chat_completion_sources, reasoning_effor
 import { reasoning_templates } from "../../../../../scripts/reasoning.js";
 import { getPresetManager } from "../../../../../scripts/preset-manager.js";
 import { isLoreManagementActive } from "./lore-management.js";
+import { isAgenticTimelineFillActive } from "./agentic-timeline-fill.js";
 import { updateRetrievalProgress, isProgressVisible } from "./retrieval-progress.js";
 
 const runSlashCommand = getContext().executeSlashCommandsWithOptions;
@@ -188,6 +189,7 @@ function getIncludeReasoning(profileId) {
 // Store timeline data
 let timelineData = [];
 let timelineFillResults = [];
+let currentChatContent = null; // Captured chat content for {{currentChat}} macro
 
 // Flag to track when we're doing internal generations (arc analyzer, queries, etc.)
 // This is used to prevent timeline injection during these operations
@@ -235,6 +237,31 @@ export function resetTimelineFillResults() {
 	saveTimelineFillResults();
 	// Update injection prompt with new data
 	updateTimelineInjection();
+}
+
+/**
+ * Get the current chat content captured at start of agentic timeline fill session
+ * @returns {string|null} The chat content or null
+ */
+export function getCurrentChatContent() {
+	return currentChatContent;
+}
+
+/**
+ * Set the current chat content (called by agentic-timeline-fill.js)
+ * @param {string|null} content - The chat content to store
+ */
+export function setCurrentChatContent(content) {
+	currentChatContent = content;
+	debug('Set currentChatContent:', content ? `${content.length} chars` : 'null');
+}
+
+/**
+ * Clear the current chat content
+ */
+export function clearCurrentChatContent() {
+	currentChatContent = null;
+	debug('Cleared currentChatContent');
 }
 
 export function getTimelineEntries() {
@@ -508,8 +535,20 @@ export function initTimelineMacro() {
         if (!Array.isArray(timelineFillResults) || timelineFillResults.length === 0) {
             return [];
         }
+        // For agentic mode, return just the plaintext response
+        if (timelineFillResults.length === 1 && timelineFillResults[0].mode === 'agentic') {
+            return timelineFillResults[0].response || '';
+        }
+        // For static mode, return the full JSON array
         return timelineFillResults;
-    }, 'Latest timeline fill query results as JSON array of { chapters | startChapter,endChapter, query, response }');
+    }, 'Latest timeline fill query results - plaintext for agentic mode, JSON array for static mode');
+
+    // Register currentChat macro - returns the chat content captured at start of agentic timeline fill session
+    MacrosParser.registerMacro('currentChat', () => {
+        const content = getCurrentChatContent();
+        if (!content) return '';
+        return content;
+    }, 'Chat content captured at start of agentic timeline fill session (only available during agentic mode)');
 
     // Register lastMessageId macro - returns the ID of the most recent message
     MacrosParser.registerMacro('lastMessageId', () => {
@@ -543,7 +582,7 @@ const TIMELINE_INJECT_KEY = 'TIMELINE_MEMORY_INJECT';
 
 /**
  * Check if timeline injection should be active
- * Returns false during internal generations (arc analyzer, queries) or lore management
+ * Returns false during internal generations (arc analyzer, queries), lore management, or agentic timeline fill
  * @returns {boolean}
  */
 function shouldInjectTimeline() {
@@ -556,6 +595,12 @@ function shouldInjectTimeline() {
     // Don't inject during lore management mode
     if (isLoreManagementActive()) {
         debug('Timeline injection skipped: lore management active');
+        return false;
+    }
+
+    // Don't inject during agentic timeline fill mode
+    if (isAgenticTimelineFillActive()) {
+        debug('Timeline injection skipped: agentic timeline fill active');
         return false;
     }
 
@@ -578,6 +623,13 @@ export function updateTimelineInjection() {
     if (isLoreManagementActive()) {
         setExtensionPrompt(TIMELINE_INJECT_KEY, '', extension_prompt_types.IN_CHAT, 0);
         debug('Timeline injection cleared: lore management active');
+        return;
+    }
+
+    // Clear injection during agentic timeline fill mode
+    if (isAgenticTimelineFillActive()) {
+        setExtensionPrompt(TIMELINE_INJECT_KEY, '', extension_prompt_types.IN_CHAT, 0);
+        debug('Timeline injection cleared: agentic timeline fill active');
         return;
     }
 

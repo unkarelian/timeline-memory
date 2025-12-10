@@ -497,6 +497,20 @@ export function loadSlashCommands() {
 	parser.addCommandObject(command.fromProps({
 		name: 'timeline-fill',
 		callback: async (args) => {
+			// Check if agentic mode is enabled
+			if (settings.agentic_timeline_fill_enabled) {
+				try {
+					const { startAgenticTimelineFillSession } = await import('./agentic-timeline-fill.js');
+					await startAgenticTimelineFillSession();
+					return '';
+				} catch (error) {
+					console.error('Agentic timeline fill failed:', error);
+					toastr.error(error?.message || 'Agentic timeline fill failed.', 'Timeline Memory');
+					return '';
+				}
+			}
+
+			// Static mode (original behavior)
 			const shouldAwait = isTrueBoolean(args?.await);
 
 			const executeFill = async () => {
@@ -550,7 +564,29 @@ export function loadSlashCommands() {
 				defaultValue: 'false',
 			}),
 		],
-		helpString: 'Generate timeline queries via the configured profile, execute them, and store results in {{timelineResponses}}.',
+		helpString: 'Generate timeline queries via the configured profile, execute them, and store results in {{timelineResponses}}. If agentic mode is enabled, starts an interactive session instead.',
+	}));
+
+	// Abort command for agentic timeline fill
+	parser.addCommandObject(command.fromProps({
+		name: 'timeline-fill-abort',
+		callback: async () => {
+			try {
+				const { abortAgenticTimelineFillSession, isAgenticTimelineFillActive } = await import('./agentic-timeline-fill.js');
+				if (!isAgenticTimelineFillActive()) {
+					toastr.info('No agentic timeline fill session is active.', 'Timeline Memory');
+					return '';
+				}
+				await abortAgenticTimelineFillSession();
+				return '';
+			} catch (error) {
+				console.error('Failed to abort agentic timeline fill:', error);
+				toastr.error(error?.message || 'Failed to abort session.', 'Timeline Memory');
+				return '';
+			}
+		},
+		namedArgumentList: [],
+		helpString: 'Abort an active agentic timeline fill session.',
 	}));
 
 	parser.addCommandObject(command.fromProps({

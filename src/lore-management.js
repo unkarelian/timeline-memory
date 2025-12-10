@@ -252,7 +252,7 @@ function getCharacterWorldInfo() {
  * List all entries in the character's assigned world info
  * @returns {Promise<Object>} Object with lorebook name and entries array
  */
-async function listEntries() {
+export async function listEntries() {
     const worldName = getCharacterWorldInfo();
 
     if (!worldName) {

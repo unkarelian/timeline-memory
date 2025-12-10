@@ -1,8 +1,8 @@
-import { eventSource, event_types } from "../../../../script.js";
+import { eventSource, event_types, saveChatConditional, reloadCurrentChat } from "../../../../script.js";
 import { getContext } from "../../../extensions.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
-import { loadSettings, changeCharaName, renderSummariesList } from "./src/settings.js";
+import { loadSettings, changeCharaName, renderSummariesList, settings } from "./src/settings.js";
 import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection } from "./src/memories.js";
 import { showRetrievalProgress, hideRetrievalProgress } from "./src/retrieval-progress.js";
 import { loadUITranslations } from "./src/locales.js";
@@ -74,14 +74,16 @@ function initQuickReplyButtons() {
 		retrieveAndSendBtn.addClass('disabled');
 		// Change icon to spinning gear
 		retrieveAndSendBtn.removeClass('fa-comment-dots').addClass('fa-gear fa-spin');
-		showRetrievalProgress('analysis');
+		// Only show progress UI for non-agentic mode
+		const showProgress = !settings.agentic_timeline_fill_enabled;
+		if (showProgress) showRetrievalProgress('analysis');
 		try {
 			await getContext().executeSlashCommandsWithOptions('/send {{input}} | /setinput | /timeline-fill await=true | /trigger |');
 		} catch (err) {
 			console.error('Timeline Memory: Retrieve and Send failed:', err);
 			toastr.error('Retrieve and Send failed: ' + err.message, 'Timeline Memory');
 		} finally {
-			hideRetrievalProgress();
+			if (showProgress) hideRetrievalProgress();
 			// Restore original icon
 			retrieveAndSendBtn.removeClass('fa-gear fa-spin').addClass('fa-comment-dots');
 			retrieveAndSendBtn.removeClass('disabled');
@@ -94,14 +96,52 @@ function initQuickReplyButtons() {
 		retrieveAndSwipeBtn.addClass('disabled');
 		// Change icon to spinning gear
 		retrieveAndSwipeBtn.removeClass('fa-rotate').addClass('fa-gear fa-spin');
-		showRetrievalProgress('analysis');
+		// Only show progress UI for non-agentic mode
+		const showProgress = !settings.agentic_timeline_fill_enabled;
+		if (showProgress) showRetrievalProgress('analysis');
+
+		const context = getContext();
+		const chat = context.chat;
+		const lastMessageId = chat.length - 1;
+
 		try {
-			await getContext().executeSlashCommandsWithOptions('/hide {{lastMessageId}} | /timeline-fill await=true | /unhide {{lastMessageId}} | /swipes-swipe |');
+			// Step 1: Hide the last message programmatically
+			if (lastMessageId >= 0 && chat[lastMessageId]) {
+				chat[lastMessageId].is_system = true;
+				// Update DOM
+				$(`.mes[mesid="${lastMessageId}"]`).attr('is_system', 'true');
+				await saveChatConditional();
+			}
+
+			// Step 2: Run timeline-fill (agentic mode will await completion)
+			await context.executeSlashCommandsWithOptions('/timeline-fill await=true');
+
+			// Step 3: Unhide the last message
+			if (lastMessageId >= 0 && chat[lastMessageId]) {
+				chat[lastMessageId].is_system = false;
+				$(`.mes[mesid="${lastMessageId}"]`).attr('is_system', 'false');
+				await saveChatConditional();
+			}
+
+			// Step 4: Reload chat to ensure fresh state
+			await reloadCurrentChat();
+
+			// Step 5: Wait for UI to fully settle after reload
+			await new Promise(resolve => setTimeout(resolve, 5000));
+
+			// Step 6: Trigger swipe via click on the swipe button
+			const swipeButton = $('#swipe_right');
+			if (swipeButton.length) {
+				swipeButton.trigger('click');
+			} else {
+				// Fallback to slash command if button not found
+				await context.executeSlashCommandsWithOptions('/swipes-swipe');
+			}
 		} catch (err) {
 			console.error('Timeline Memory: Retrieve and Swipe failed:', err);
 			toastr.error('Retrieve and Swipe failed: ' + err.message, 'Timeline Memory');
 		} finally {
-			hideRetrievalProgress();
+			if (showProgress) hideRetrievalProgress();
 			// Restore original icon
 			retrieveAndSwipeBtn.removeClass('fa-gear fa-spin').addClass('fa-rotate');
 			retrieveAndSwipeBtn.removeClass('disabled');
@@ -142,6 +182,27 @@ jQuery(async () => {
 				} else {
 					// Check for interrupted session that needs recovery
 					await recoverInterruptedSession();
+				}
+			} catch (err) {
+				// Module might not be loaded yet, ignore
+			}
+			// Handle agentic timeline fill session recovery/abort
+			try {
+				const {
+					abortAgenticTimelineFillSession,
+					isAgenticTimelineFillActive,
+					getSessionChatId: getAgenticSessionChatId,
+					recoverInterruptedSession: recoverAgenticSession
+				} = await import('./src/agentic-timeline-fill.js');
+				if (isAgenticTimelineFillActive()) {
+					// Only abort if we're switching to a different chat
+					const sessionChatId = getAgenticSessionChatId();
+					if (sessionChatId && chatId !== sessionChatId) {
+						await abortAgenticTimelineFillSession();
+					}
+				} else {
+					// Check for interrupted session that needs recovery
+					await recoverAgenticSession();
 				}
 			} catch (err) {
 				// Module might not be loaded yet, ignore

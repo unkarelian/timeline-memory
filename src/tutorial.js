@@ -191,6 +191,57 @@ The results persist even after the message is done generating! Swipes automatica
         highlight: '#rmr-retrieve-send'
     },
     {
+        id: 'agentic-timeline-fill',
+        titleKey: 'tutorial_agentic_timeline_fill_title',
+        titleDefault: 'Agentic Timeline Fill - Advanced Retrieval',
+        contentKey: 'tutorial_agentic_timeline_fill_content',
+        contentDefault: `<b>Agentic Timeline Fill</b> is an advanced alternate mode where an AI agent dynamically retrieves context using tools - similar to Lore Management mode.
+
+<b>How it differs from static Timeline Fill:</b>
+• <i>Static:</i> AI proposes queries in one batch, all executed automatically
+• <i>Agentic:</i> AI actively uses tools to query chapters, can adapt based on results
+
+<b>Available tools for the agent:</b>
+• <b>query_timeline_chapter</b> - Query a single chapter
+• <b>query_timeline_chapters</b> - Query a range of chapters (respects chapter limit)
+• <b>list_lorebook_entries</b> - Access the character's lorebook/world info
+• <b>end_information_retrieval</b> - Signal completion with final summary
+
+<b>Requirements:</b>
+• A model that supports function/tool calls
+• An Agentic Timeline Fill profile configured
+
+The agent ends its session by calling <i>end_information_retrieval</i> with the crucial information it found, which is saved to {{timelineResponses}}.`,
+        highlight: '#rmr_agentic_timeline_fill_enabled'
+    },
+    {
+        id: 'agentic-timeline-fill-setup',
+        titleKey: 'tutorial_agentic_timeline_fill_setup_title',
+        titleDefault: 'Setting Up Agentic Timeline Fill',
+        contentKey: 'tutorial_agentic_timeline_fill_setup_content',
+        contentDefault: `<b>To use Agentic Timeline Fill:</b>
+
+1. <b>Create an Agentic Timeline Fill Profile:</b>
+   • Use a capable model that supports tool calls
+   • GLM 4.6, Claude, Grok 4 Fast, etc. work well
+
+2. <b>Select the profile</b> in the Agentic Timeline Fill section
+
+3. <b>Enable "Agentic Timeline Fill Mode"</b>
+
+4. <b>(Optional) Import a Chat Completion preset</b> optimized for retrieval:
+   <a href="https://raw.githubusercontent.com/unkarelian/timeline-extension-prompts/refs/heads/master/Retrieval%20Management.json" target="_blank">Download Preset</a>
+   (Import via SillyTavern's Chat Completion settings)
+
+<b>Running Agentic Timeline Fill:</b>
+• Use the quick buttons (💬 or 🔄) - they automatically use agentic mode when enabled
+• Or click "Run Agentic Timeline Fill" manually
+• Or use <code>/timeline-fill</code> command
+
+<b>Note:</b> The "Max Timeline Fill Queries" limit does NOT apply to agentic mode - the agent decides when to stop.`,
+        highlight: '#rmr_agentic_timeline_fill_profile'
+    },
+    {
         id: 'presets',
         titleKey: 'tutorial_presets_title',
         titleDefault: 'Presets - Save Your Configurations',
@@ -230,7 +281,7 @@ The AI reads your story, identifies important lore (characters, locations, event
 
 <b>Requirements:</b>
 • A character with an assigned World Info/Lorebook
-• A capable, agentic AI model (GLM 4.6, Kimi, Claude (set effort to 'auto!'), Grok 4 fast, etc)
+• A capable, agentic AI model (GLM 4.6, Kimi, Claude (set effort to 'auto!'), Grok 4 Fast, etc)
 • A properly configured Lore Management profile
 
 <i>This is powerful but requires setup. Next steps explain how.</i>`

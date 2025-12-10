@@ -7,6 +7,7 @@ A SillyTavern extension for creating a timeline of summarized chapters from your
 - **Chapter Timeline**: Summarize chapters and track them in a linear timeline accessible via macros
 - **Arc Analyzer**: AI-powered detection of natural chapter endpoints in your chat
 - **Timeline Fill**: Smart context retrieval that queries relevant chapters based on current conversation
+- **Agentic Timeline Fill**: Advanced tool-based retrieval where an AI agent dynamically queries chapters and lorebook
 - **Inject at Depth**: Automatic timeline injection into AI context without prompt editing
 - **Lore Management Mode**: Autonomous AI-driven lorebook editing based on story events
 - **Customizable Presets**: Save and share configurations for all workflow types
@@ -94,6 +95,36 @@ Timeline Fill automatically queries your chapter history to gather relevant cont
 **Quick Buttons** (in the bottom bar near the send button):
 - **Chat bubble** - Retrieve and Send: Retrieves timeline context, then sends your message
 - **Recycle wheel** - Retrieve and Swipe: Retrieves timeline context, then regenerates the last response
+
+### Agentic Timeline Fill (Advanced)
+
+Agentic Timeline Fill is an advanced alternate mode where an AI agent dynamically retrieves context using tools - similar to Lore Management Mode.
+
+**How it differs from static Timeline Fill:**
+- **Static**: AI proposes queries in one batch, all executed automatically
+- **Agentic**: AI actively uses tools to query chapters, can adapt based on results
+
+**Available tools for the agent:**
+- `query_timeline_chapter` - Query a single chapter
+- `query_timeline_chapters` - Query a range of chapters (respects the chapter limit setting)
+- `list_lorebook_entries` - Access the character's lorebook/world info
+- `end_information_retrieval` - Signal completion with final summary
+
+**Requirements:**
+- A model that supports function/tool calls (GLM 4.6, Claude, Grok 4 Fast, etc.)
+- An Agentic Timeline Fill profile configured
+
+**To use:**
+1. Create an Agentic Timeline Fill Profile using a capable model with tool support
+2. Select the profile in the Agentic Timeline Fill section
+3. Enable "Agentic Timeline Fill Mode"
+4. Use the quick buttons or click "Run Agentic Timeline Fill"
+
+The agent ends its session by calling `end_information_retrieval` with the crucial information it found, which is saved to `{{timelineResponses}}`.
+
+**Note:** The "Max Timeline Fill Queries" limit does NOT apply to agentic mode - the agent decides when to stop. However, the "Max Chapters per Query" limit still applies to `query_timeline_chapters`.
+
+**Recommended preset:** [Retrieval Management](https://raw.githubusercontent.com/unkarelian/timeline-extension-prompts/refs/heads/master/Retrieval%20Management.json) (Import via SillyTavern's Chat Completion settings)
 
 ### Inject at Depth
 
@@ -239,10 +270,13 @@ The extension provides the following macros for use in prompts:
 
 - **Summarization Profile**: For chapter summarization
 - **Chapter Query Profile**: For answering chapter questions
-- **Timeline Fill Profile**: For generating retrieval queries
+- **Timeline Fill Profile**: For generating retrieval queries (static mode)
+- **Agentic Timeline Fill Profile**: For tool-based retrieval (agentic mode)
 - **Arc Analyzer Profile**: For detecting story arcs
 - **Lore Management Profile**: For lorebook editing
 - **Max Requests per Minute**: Rate limiting to avoid API throttling
+- **Max Chapters per Query**: Limit how many chapters can be queried at once (also affects agentic mode)
+- **Max Timeline Fill Queries**: Limit queries per Timeline Fill operation (static mode only)
 
 ### Prompts
 
@@ -273,6 +307,8 @@ Each workflow type has configurable system and user prompts with macro support.
 | v1.6 | Arc Analyzer revamp, added modifiable chapter summaries |
 | v1.7 | Updated default prompts |
 | v1.8 | Usability update: tutorial mode, timeline-fill buttons, inject at depth, progress bar |
+| v1.9 | Query limits for chapters per query and timeline fill queries, Spanish localization |
+| v2.0 | **Agentic Timeline Fill**: Advanced tool-based retrieval mode with dynamic chapter querying and lorebook access |
 
 ## Support
 
