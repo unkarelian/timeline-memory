@@ -14,6 +14,7 @@ import { isLoreManagementActive } from "./lore-management.js";
 import { isAgenticTimelineFillActive } from "./agentic-timeline-fill.js";
 import { updateRetrievalProgress, isProgressVisible } from "./retrieval-progress.js";
 import { translate } from "../../../../../scripts/i18n.js";
+import { createChatBackup } from "./backup.js";
 
 const runSlashCommand = getContext().executeSlashCommandsWithOptions;
 const CHAT_COMPLETION_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
@@ -1311,6 +1312,9 @@ function validateTimelineFillItems(rawItems) {
 }
 
 export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
+	// Create a backup before any operations
+	await createChatBackup('timeline fill');
+
 	loadTimelineData();
 
 	const profileId = profileOverride || settings.timeline_fill_profile;

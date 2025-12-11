@@ -10,6 +10,7 @@ import { saveChatConditional, reloadCurrentChat, eventSource, event_types, stopG
 import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { settings } from "./settings.js";
 import { log, debug, error } from "./logging.js";
+import { createChatBackup } from "./backup.js";
 
 // Note: setCurrentChatContent and clearCurrentChatContent are imported dynamically
 // to avoid circular dependency issues with memories.js
@@ -504,6 +505,9 @@ export async function startAgenticTimelineFillSession() {
         toastr.warning('An agentic timeline fill session is already active', 'Timeline Memory');
         return;
     }
+
+    // Create a backup before any operations
+    await createChatBackup('agentic timeline fill');
 
     const profileId = settings.agentic_timeline_fill_profile;
     if (!profileId) {

@@ -11,6 +11,7 @@ import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { world_names, loadWorldInfo, createWorldInfoEntry, deleteWorldInfoEntry, saveWorldInfo } from "../../../../world-info.js";
 import { settings } from "./settings.js";
 import { log, debug, error } from "./logging.js";
+import { createChatBackup } from "./backup.js";
 
 /**
  * Switch to a profile using SlashCommandParser directly
@@ -605,6 +606,9 @@ export async function startLoreManagementSession() {
         toastr.warning('A lore management session is already active', 'Timeline Memory');
         return;
     }
+
+    // Create a backup before any operations
+    await createChatBackup('lore management');
 
     const loreProfileId = settings.lore_management_profile;
     if (!loreProfileId) {
