@@ -6,7 +6,7 @@
  */
 
 import { extension_settings, getContext } from "../../../../extensions.js";
-import { saveChatConditional, reloadCurrentChat, eventSource, event_types, stopGeneration, isSwipingAllowed } from "../../../../../script.js";
+import { saveChatConditional, reloadCurrentChat, eventSource, event_types, stopGeneration, isSwipingAllowed, swipe_right } from "../../../../../script.js";
 import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { settings } from "./settings.js";
 import { log, debug, error } from "./logging.js";
@@ -705,7 +705,7 @@ function onGenerationEnded() {
 
             log(`Swipe attempt ${i + 1}: executing swipe...`);
             try {
-                await executeSlashCommandsWithOptions('/swipes-swipe');
+                await swipe_right();
                 log('Swipe completed successfully');
                 swipeSucceeded = true;
                 break;

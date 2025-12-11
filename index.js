@@ -1,4 +1,4 @@
-import { eventSource, event_types, saveChatConditional, reloadCurrentChat } from "../../../../script.js";
+import { eventSource, event_types, saveChatConditional, reloadCurrentChat, swipe_right } from "../../../../script.js";
 import { getContext } from "../../../extensions.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
@@ -129,14 +129,8 @@ function initQuickReplyButtons() {
 			// Step 5: Wait for UI to fully settle after reload
 			await new Promise(resolve => setTimeout(resolve, 5000));
 
-			// Step 6: Trigger swipe via click on the swipe button
-			const swipeButton = $('#swipe_right');
-			if (swipeButton.length) {
-				swipeButton.trigger('click');
-			} else {
-				// Fallback to slash command if button not found
-				await context.executeSlashCommandsWithOptions('/swipes-swipe');
-			}
+			// Step 6: Trigger swipe
+			await swipe_right();
 		} catch (err) {
 			console.error('Timeline Memory: Retrieve and Swipe failed:', err);
 			toastr.error('Retrieve and Swipe failed: ' + err.message, 'Timeline Memory');
