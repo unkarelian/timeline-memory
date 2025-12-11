@@ -1927,9 +1927,13 @@ async function generateChapterSummary(mes_id) {
 }
 
 // Simplified chapter summarization - just creates a summary
-export async function summarizeChapter(message, options={}) {
+// Accepts either a message ID (number) or a jQuery element for backwards compatibility
+export async function summarizeChapter(messageOrId, options={}) {
 	commandArgs = options;
-	const mes_id = Number(message.attr('mesid'));
+	// Accept either a message ID (number) or a jQuery element
+	const mes_id = typeof messageOrId === 'number'
+		? messageOrId
+		: Number(messageOrId.attr('mesid'));
 	const chat = getContext().chat;
 
 	// Find the last chapter end marker
@@ -1948,7 +1952,11 @@ export async function summarizeChapter(message, options={}) {
 	// Mark chapter end
 	chat[mes_id].extra.rmr_chapter = true;
 	getContext().saveChat();
-	toggleChapterHighlight($(`.mes[mesid="${mes_id}"] .rmr-button.fa-circle-stop`), mes_id);
+	// Toggle highlight only if message is rendered (may not be visible in DOM)
+	const highlightEl = $(`.mes[mesid="${mes_id}"] .rmr-button.fa-circle-stop`);
+	if (highlightEl.length > 0) {
+		toggleChapterHighlight(highlightEl, mes_id);
+	}
 
 	doneToast(`Chapter ${timelineData.length} added to timeline.`);
 }
@@ -2255,10 +2263,10 @@ async function showArcPopup(arcs) {
             const popupEl = overlayEl.querySelector('.rmr-arc-popup');
 
             try {
-                // Validate the target message exists
+                // Validate the target message exists in chat array (not DOM - allows unrendered messages)
                 const mesId = Number(arc.chapterEnd);
-                const mesEl = $(`.mes[mesid="${mesId}"]`);
-                if (!mesEl || mesEl.length === 0) {
+                const chat = getContext().chat;
+                if (mesId < 0 || mesId >= chat.length) {
                     toastr.error(`Message ${mesId} not found. The chat may have changed.`, 'Arc Analyzer');
                     return;
                 }
@@ -2272,12 +2280,12 @@ async function showArcPopup(arcs) {
                 btn.textContent = 'Summarizing...';
                 btn.disabled = true;
 
-                // Call summarizeChapter directly with the profile override
+                // Call summarizeChapter directly with the profile override (pass ID directly)
                 const options = {};
                 if (settings.profile) {
                     options.profile = settings.profile;
                 }
-                await summarizeChapter(mesEl, options);
+                await summarizeChapter(mesId, options);
 
                 // Mark this arc as completed in session state (always do this)
                 arcSessionState.completedArcEnds.add(arc.chapterEnd);
@@ -2464,9 +2472,10 @@ async function showArcPopup(arcs) {
                         const innerLoadingText = innerLoadingEl?.querySelector('span');
 
                         try {
+                            // Validate the target message exists in chat array (not DOM - allows unrendered messages)
                             const mesId = Number(arc.chapterEnd);
-                            const mesEl = $(`.mes[mesid="${mesId}"]`);
-                            if (!mesEl || mesEl.length === 0) {
+                            const chat = getContext().chat;
+                            if (mesId < 0 || mesId >= chat.length) {
                                 toastr.error(`Message ${mesId} not found.`, 'Arc Analyzer');
                                 return;
                             }
@@ -2480,7 +2489,7 @@ async function showArcPopup(arcs) {
 
                             const options = {};
                             if (settings.profile) options.profile = settings.profile;
-                            await summarizeChapter(mesEl, options);
+                            await summarizeChapter(mesId, options);
 
                             arcSessionState.completedArcEnds.add(arc.chapterEnd);
 
