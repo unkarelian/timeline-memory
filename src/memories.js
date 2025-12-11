@@ -2207,8 +2207,8 @@ async function showArcPopup(arcs) {
                     <button class="menu_button rmr-arc-reanalyze-btn" title="Run fresh analysis">
                         <i class="fa-solid fa-rotate"></i> ${translate('Re-analyze', 'rmr_arc_reanalyze')}
                     </button>
-                    <button class="rmr-arc-popup-close" title="Close">×</button>
                 </div>
+                <button class="rmr-arc-popup-close" title="Close">×</button>
             </div>
             <div class="rmr-arc-popup-body">
                 <div class="rmr-arc-list" id="rmr-arc-list"></div>
