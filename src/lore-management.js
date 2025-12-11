@@ -148,12 +148,25 @@ export async function recoverInterruptedSession() {
 
     const chat = context.chat;
 
+    // SAFETY: Validate startMessageIndex before any destructive operations
+    if (savedState.startMessageIndex <= 0) {
+        error('Invalid startMessageIndex (0 or negative) - refusing to delete messages to prevent chat loss');
+        toastr.error('Recovery aborted: Invalid session state detected', 'Timeline Memory');
+        clearStateFromMetadata();
+        return false;
+    }
+
     try {
         // Delete agentic messages (from startMessageIndex to end)
-        const messagesToDelete = chat.length - savedState.startMessageIndex;
-        if (messagesToDelete > 0) {
-            log(`Deleting ${messagesToDelete} agentic messages`);
-            chat.splice(savedState.startMessageIndex, messagesToDelete);
+        // Only delete if startMessageIndex is within bounds
+        if (savedState.startMessageIndex <= chat.length) {
+            const messagesToDelete = chat.length - savedState.startMessageIndex;
+            if (messagesToDelete > 0) {
+                log(`Deleting ${messagesToDelete} agentic messages`);
+                chat.splice(savedState.startMessageIndex, messagesToDelete);
+            }
+        } else {
+            error(`startMessageIndex (${savedState.startMessageIndex}) exceeds chat length (${chat.length}) - skipping message deletion`);
         }
 
         // Unhide the messages that were hidden
@@ -607,6 +620,13 @@ export async function startLoreManagementSession() {
         return;
     }
 
+    // SAFETY: Check if agentic timeline fill session is active (prevent concurrent sessions)
+    const context = getContext();
+    if (context.chatMetadata?.agentic_timeline_fill_session?.active) {
+        toastr.warning('Cannot start lore management while timeline fill session is active', 'Timeline Memory');
+        return;
+    }
+
     // Create a backup before any operations
     await createChatBackup('lore management');
 
@@ -622,7 +642,12 @@ export async function startLoreManagementSession() {
         return;
     }
 
-    const context = getContext();
+    // SAFETY: Validate chat exists and has messages
+    if (!context.chat || context.chat.length === 0) {
+        error('Cannot start lore management session on empty chat');
+        toastr.error('Cannot start session on empty chat', 'Timeline Memory');
+        return;
+    }
 
     // Create a promise that resolves when the session is complete
     const sessionCompletePromise = new Promise((resolve) => {
@@ -929,10 +954,17 @@ async function cleanupLoreManagementSession() {
         unregisterLoreTools();
 
         // Delete all messages from the session
-        const messagesToDelete = chat.length - loreManagementState.startMessageIndex;
-        if (messagesToDelete > 0) {
-            log(`Deleting ${messagesToDelete} messages from lore management session`);
-            chat.splice(loreManagementState.startMessageIndex, messagesToDelete);
+        // SAFETY: Refuse to delete from index 0 - this would delete the entire chat
+        if (loreManagementState.startMessageIndex <= 0) {
+            error('Invalid startMessageIndex (0 or negative) - skipping message deletion in cleanup to prevent chat loss');
+        } else if (loreManagementState.startMessageIndex <= chat.length) {
+            const messagesToDelete = chat.length - loreManagementState.startMessageIndex;
+            if (messagesToDelete > 0) {
+                log(`Deleting ${messagesToDelete} messages from lore management session`);
+                chat.splice(loreManagementState.startMessageIndex, messagesToDelete);
+            }
+        } else {
+            error(`startMessageIndex (${loreManagementState.startMessageIndex}) exceeds chat length (${chat.length}) - skipping message deletion`);
         }
 
         // Unhide the messages that were hidden at session start

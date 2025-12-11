@@ -162,44 +162,60 @@ jQuery(async () => {
 		eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId)=>onMessageRendered(mesId));
 		eventSource.on(event_types.CHAT_CHANGED, async (chatId)=>{
 			if (!chatId) return;
-			// Abort any active lore management session when chat changes to a DIFFERENT chat
-			// Also check for and recover from interrupted sessions (e.g., page refresh)
-			try {
-				const { abortLoreManagementSession, isLoreManagementActive, getSessionChatId, recoverInterruptedSession } = await import('./src/lore-management.js');
-				if (isLoreManagementActive()) {
-					// Only abort if we're switching to a different chat
-					// (CHAT_CHANGED also fires during save/reload of the same chat)
-					const sessionChatId = getSessionChatId();
-					if (sessionChatId && chatId !== sessionChatId) {
-						await abortLoreManagementSession();
+
+			// SAFETY: Check for conflicting session metadata before recovery
+			// If both sessions have metadata, that's an error state - clear both to prevent corruption
+			const context = getContext();
+			const hasLoreMetadata = context.chatMetadata?.lore_management_session?.active;
+			const hasAgenticMetadata = context.chatMetadata?.agentic_timeline_fill_session?.active;
+
+			if (hasLoreMetadata && hasAgenticMetadata) {
+				console.error('Timeline Memory: Both lore management and agentic timeline fill have active metadata - clearing both to prevent corruption');
+				toastr.error('Conflicting session states detected - clearing both. Chat backup should be available.', 'Timeline Memory');
+				delete context.chatMetadata.lore_management_session;
+				delete context.chatMetadata.agentic_timeline_fill_session;
+				await saveChatConditional();
+				// Skip recovery for both - let the backup be the safety net
+			} else {
+				// Abort any active lore management session when chat changes to a DIFFERENT chat
+				// Also check for and recover from interrupted sessions (e.g., page refresh)
+				try {
+					const { abortLoreManagementSession, isLoreManagementActive, getSessionChatId, recoverInterruptedSession } = await import('./src/lore-management.js');
+					if (isLoreManagementActive()) {
+						// Only abort if we're switching to a different chat
+						// (CHAT_CHANGED also fires during save/reload of the same chat)
+						const sessionChatId = getSessionChatId();
+						if (sessionChatId && chatId !== sessionChatId) {
+							await abortLoreManagementSession();
+						}
+					} else {
+						// Check for interrupted session that needs recovery
+						await recoverInterruptedSession();
 					}
-				} else {
-					// Check for interrupted session that needs recovery
-					await recoverInterruptedSession();
+				} catch (err) {
+					// Module might not be loaded yet, ignore
 				}
-			} catch (err) {
-				// Module might not be loaded yet, ignore
-			}
-			// Handle agentic timeline fill session recovery/abort
-			try {
-				const {
-					abortAgenticTimelineFillSession,
-					isAgenticTimelineFillActive,
-					getSessionChatId: getAgenticSessionChatId,
-					recoverInterruptedSession: recoverAgenticSession
-				} = await import('./src/agentic-timeline-fill.js');
-				if (isAgenticTimelineFillActive()) {
-					// Only abort if we're switching to a different chat
-					const sessionChatId = getAgenticSessionChatId();
-					if (sessionChatId && chatId !== sessionChatId) {
-						await abortAgenticTimelineFillSession();
+				// Handle agentic timeline fill session recovery/abort
+				try {
+					const {
+						abortAgenticTimelineFillSession,
+						isAgenticTimelineFillActive,
+						getSessionChatId: getAgenticSessionChatId,
+						recoverInterruptedSession: recoverAgenticSession
+					} = await import('./src/agentic-timeline-fill.js');
+					if (isAgenticTimelineFillActive()) {
+						// Only abort if we're switching to a different chat
+						const sessionChatId = getAgenticSessionChatId();
+						if (sessionChatId && chatId !== sessionChatId) {
+							await abortAgenticTimelineFillSession();
+						}
+					} else {
+						// Check for interrupted session that needs recovery
+						await recoverAgenticSession();
 					}
-				} else {
-					// Check for interrupted session that needs recovery
-					await recoverAgenticSession();
+				} catch (err) {
+					// Module might not be loaded yet, ignore
 				}
-			} catch (err) {
-				// Module might not be loaded yet, ignore
 			}
 			// Reset arc analyzer session state when chat changes
 			resetArcSessionState();
