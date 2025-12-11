@@ -13,6 +13,7 @@ import { getPresetManager } from "../../../../../scripts/preset-manager.js";
 import { isLoreManagementActive } from "./lore-management.js";
 import { isAgenticTimelineFillActive } from "./agentic-timeline-fill.js";
 import { updateRetrievalProgress, isProgressVisible } from "./retrieval-progress.js";
+import { translate } from "../../../../../scripts/i18n.js";
 
 const runSlashCommand = getContext().executeSlashCommandsWithOptions;
 const CHAT_COMPLETION_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
@@ -194,6 +195,28 @@ let currentChatContent = null; // Captured chat content for {{currentChat}} macr
 // Flag to track when we're doing internal generations (arc analyzer, queries, etc.)
 // This is used to prevent timeline injection during these operations
 let isInternalGeneration = false;
+
+// Session-level storage for arc analyzer state (persists until page refresh or chat change)
+let arcSessionState = {
+    chatId: null,           // To detect chat changes
+    arcs: [],               // The analyzed arcs
+    completedArcEnds: new Set(),  // Set of chapterEnd values that have been completed
+    summarizingArcEnd: null,      // The chapterEnd currently being summarized (null if none)
+    currentOverlay: null,         // Reference to currently open popup overlay (for updating from background)
+};
+
+/**
+ * Reset arc session state (call on chat change)
+ */
+export function resetArcSessionState() {
+    arcSessionState = {
+        chatId: null,
+        arcs: [],
+        completedArcEnds: new Set(),
+        summarizingArcEnd: null,
+        currentOverlay: null,
+    };
+}
 
 let commandArgs;
 
@@ -2078,6 +2101,63 @@ function getMostRecentMessageId() {
 }
 
 /**
+ * Fetch arcs from the API (without showing popup or managing session state)
+ * @param {string|null} profileOverride - Optional profile ID override
+ * @returns {Promise<Array>} Array of validated arc objects
+ */
+async function fetchArcsFromAPI(profileOverride = null) {
+    const context = getContext();
+    const profileId = profileOverride || settings.arc_profile;
+
+    if (!profileId) {
+        throw new Error('No arc analyzer profile selected');
+    }
+
+    // Build prompt content
+    const history = evaluateMacros('{{chapterHistory}}', {});
+    let prompt = settings.arc_analyzer_prompt_template || '';
+    prompt = prompt.replace(/{{chapterHistory}}/gi, history);
+    prompt = context.substituteParams(prompt, context.name1, context.name2);
+
+    let systemPrompt = '';
+    if (settings.arc_analyzer_system_prompt && settings.arc_analyzer_system_prompt.trim()) {
+        systemPrompt = settings.arc_analyzer_system_prompt;
+        systemPrompt = systemPrompt.replace(/{{chapterHistory}}/gi, history);
+        systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+    }
+
+    // Prepare messages
+    const messages = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    messages.push({ role: 'user', content: prompt });
+
+    // Token + overrides
+    const maxTokens = await getMaxTokensForProfile(profileId);
+    const overridePayload = buildOverridePayload(profileId, maxTokens);
+    const reasoningEffort = getReasoningEffort(profileId);
+    if (reasoningEffort !== undefined) overridePayload.reasoning_effort = reasoningEffort;
+    const includeReasoning = getIncludeReasoning(profileId);
+    if (includeReasoning !== undefined) overridePayload.include_reasoning = includeReasoning;
+
+    // Send via ConnectionManagerRequestService
+    const result = await ConnectionManagerRequestService.sendRequest(
+        profileId,
+        messages,
+        maxTokens,
+        { includePreset: true, includeInstruct: true, stream: false },
+        overridePayload,
+    );
+
+    const content = result?.content || result || '';
+    const parsed = await reasoningParser(content, profileId);
+    const finalContent = parsed ? parsed.content : content;
+
+    const unfenced = stripJsonFences(finalContent);
+    const arr = tryParseJsonArray(unfenced);
+    return validateArcItems(arr);
+}
+
+/**
  * Show the arc analyzer popup with persistent display
  * @param {Array} arcs - Array of arc objects from the analyzer
  */
@@ -2094,23 +2174,46 @@ async function showArcPopup(arcs) {
     const firstVisibleId = findFirstVisibleMessageIndex();
     const mostRecentId = getMostRecentMessageId();
 
+    // Filter out arcs that are now before the first visible message (negative range)
+    // This handles the case where user closed popup, summarization completed, and now reopens
+    const filteredArcs = arcs.filter(arc => {
+        const messageCount = arc.chapterEnd - firstVisibleId + 1;
+        return messageCount > 0;
+    });
+
+    // Update session state with filtered arcs
+    arcSessionState.arcs = filteredArcs;
+
+    if (filteredArcs.length === 0) {
+        await Popup.show.text('Arc Analyzer', translate('All arcs have been processed. Run Re-analyze for new arcs.', 'rmr_arc_all_processed'));
+        return;
+    }
+
+    // Check if there's an active summarization
+    const isSummarizing = arcSessionState.summarizingArcEnd !== null;
+
     // Create custom popup HTML
     const overlayEl = document.createElement('div');
     overlayEl.className = 'rmr-arc-popup-overlay';
     overlayEl.innerHTML = `
-        <div class="rmr-arc-popup">
+        <div class="rmr-arc-popup${isSummarizing ? ' loading' : ''}">
             <div class="rmr-arc-popup-header">
                 <span class="rmr-arc-popup-title">Arc Analyzer</span>
                 <span class="rmr-arc-popup-position">
                     First visible: <strong id="rmr-arc-first-visible">${firstVisibleId}</strong> |
                     Most recent: <strong id="rmr-arc-most-recent">${mostRecentId}</strong>
                 </span>
-                <button class="rmr-arc-popup-close" title="Close">×</button>
+                <div class="rmr-arc-popup-actions">
+                    <button class="menu_button rmr-arc-reanalyze-btn" title="Run fresh analysis">
+                        <i class="fa-solid fa-rotate"></i> ${translate('Re-analyze', 'rmr_arc_reanalyze')}
+                    </button>
+                    <button class="rmr-arc-popup-close" title="Close">×</button>
+                </div>
             </div>
             <div class="rmr-arc-popup-body">
                 <div class="rmr-arc-list" id="rmr-arc-list"></div>
             </div>
-            <div class="rmr-arc-popup-loading" id="rmr-arc-loading">
+            <div class="rmr-arc-popup-loading${isSummarizing ? ' active' : ''}" id="rmr-arc-loading">
                 <i class="fa-solid fa-gear fa-spin"></i>
                 <span>Summarizing chapter...</span>
             </div>
@@ -2120,10 +2223,12 @@ async function showArcPopup(arcs) {
     // Build arc items
     const arcListEl = overlayEl.querySelector('#rmr-arc-list');
 
-    for (const arc of arcs) {
+    for (const arc of filteredArcs) {
         const messageCount = arc.chapterEnd - firstVisibleId + 1;
+        const isCompleted = arcSessionState.completedArcEnds.has(arc.chapterEnd);
+        const isSummarizingThis = arcSessionState.summarizingArcEnd === arc.chapterEnd;
         const arcItem = document.createElement('div');
-        arcItem.className = 'rmr-arc-item';
+        arcItem.className = 'rmr-arc-item' + (isCompleted ? ' completed' : '');
         arcItem.dataset.arcEnd = arc.chapterEnd;
         arcItem.innerHTML = `
             <div class="rmr-arc-item-header">
@@ -2135,12 +2240,17 @@ async function showArcPopup(arcs) {
             </div>
             <div class="rmr-arc-item-summary">${_sanitize(arc.summary)}</div>
             ${arc.justification ? `<div class="rmr-arc-item-justification"><i>${_sanitize(arc.justification)}</i></div>` : ''}
-            <button class="menu_button rmr-arc-item-btn">Create Chapter Here</button>
+            <button class="menu_button rmr-arc-item-btn" ${isCompleted || isSummarizingThis ? 'disabled' : ''}>${isCompleted ? '✓ Completed' : (isSummarizingThis ? 'Summarizing...' : 'Create Chapter Here')}</button>
         `;
 
         // Button click handler
         const btn = arcItem.querySelector('.rmr-arc-item-btn');
         btn.addEventListener('click', async () => {
+            // Prevent double-clicks
+            if (arcSessionState.summarizingArcEnd !== null) {
+                return;
+            }
+
             const loadingEl = overlayEl.querySelector('#rmr-arc-loading');
             const popupEl = overlayEl.querySelector('.rmr-arc-popup');
 
@@ -2153,90 +2263,358 @@ async function showArcPopup(arcs) {
                     return;
                 }
 
-                // Show loading state
-                loadingEl.classList.add('active');
-                popupEl.classList.add('loading');
+                // Track summarization state in session (persists even if popup closes)
+                arcSessionState.summarizingArcEnd = arc.chapterEnd;
+
+                // Show loading state (if popup is still open)
+                if (loadingEl) loadingEl.classList.add('active');
+                if (popupEl) popupEl.classList.add('loading');
+                btn.textContent = 'Summarizing...';
+                btn.disabled = true;
 
                 // Call summarizeChapter directly with the profile override
-                // This properly awaits the entire summarization process
                 const options = {};
                 if (settings.profile) {
                     options.profile = settings.profile;
                 }
                 await summarizeChapter(mesEl, options);
 
-                // Update position info after successful summary
+                // Mark this arc as completed in session state (always do this)
+                arcSessionState.completedArcEnds.add(arc.chapterEnd);
+
+                // Get new position info for filtering
                 const newFirstVisible = findFirstVisibleMessageIndex();
                 const newMostRecent = getMostRecentMessageId();
-                overlayEl.querySelector('#rmr-arc-first-visible').textContent = newFirstVisible;
-                overlayEl.querySelector('#rmr-arc-most-recent').textContent = newMostRecent;
 
-                // Update message counts and remove arcs that are now before the first visible message
-                overlayEl.querySelectorAll('.rmr-arc-item').forEach(item => {
-                    const arcEnd = parseInt(item.dataset.arcEnd, 10);
-                    const newCount = arcEnd - newFirstVisible + 1;
-
-                    // Remove arcs that are now before the first visible message
-                    if (newCount <= 0) {
-                        item.remove();
-                        return;
-                    }
-
-                    const countEl = item.querySelector('.rmr-arc-item-count');
-                    if (countEl) {
-                        countEl.textContent = newCount;
-                    }
+                // Filter out arcs that are now in negative range from session state
+                arcSessionState.arcs = arcSessionState.arcs.filter(a => {
+                    const count = a.chapterEnd - newFirstVisible + 1;
+                    return count > 0;
                 });
 
-                // Mark this arc as completed
-                arcItem.classList.add('completed');
-                btn.textContent = '✓ Completed';
-                btn.disabled = true;
+                // Update UI using the CURRENT overlay (may be different if user closed and reopened)
+                const currentOverlay = arcSessionState.currentOverlay;
+                if (currentOverlay && document.body.contains(currentOverlay)) {
+                    // Update position info
+                    const firstVisibleEl = currentOverlay.querySelector('#rmr-arc-first-visible');
+                    const mostRecentEl = currentOverlay.querySelector('#rmr-arc-most-recent');
+                    if (firstVisibleEl) firstVisibleEl.textContent = newFirstVisible;
+                    if (mostRecentEl) mostRecentEl.textContent = newMostRecent;
+
+                    // Update message counts and remove arcs that are now before the first visible message
+                    currentOverlay.querySelectorAll('.rmr-arc-item').forEach(item => {
+                        const arcEnd = parseInt(item.dataset.arcEnd, 10);
+                        const newCount = arcEnd - newFirstVisible + 1;
+
+                        // Remove arcs that are now before the first visible message
+                        if (newCount <= 0) {
+                            item.classList.add('fade-out');
+                            setTimeout(() => item.remove(), 200);
+                            return;
+                        }
+
+                        const countEl = item.querySelector('.rmr-arc-item-count');
+                        if (countEl) {
+                            countEl.textContent = newCount;
+                        }
+                    });
+
+                    // Find and mark the completed arc item in the current overlay
+                    const completedArcItem = currentOverlay.querySelector(`.rmr-arc-item[data-arc-end="${arc.chapterEnd}"]`);
+                    if (completedArcItem) {
+                        completedArcItem.classList.add('completed');
+                        const completedBtn = completedArcItem.querySelector('.rmr-arc-item-btn');
+                        if (completedBtn) {
+                            completedBtn.textContent = '✓ Completed';
+                            completedBtn.disabled = true;
+                        }
+                    }
+                }
 
             } catch (err) {
                 console.error('Arc apply error:', err);
                 toastr.error('Failed to apply chapter end', 'Arc Analyzer');
+
+                // Reset button state if popup is still open (use current overlay)
+                const currentOverlay = arcSessionState.currentOverlay;
+                if (currentOverlay && document.body.contains(currentOverlay)) {
+                    const errorArcItem = currentOverlay.querySelector(`.rmr-arc-item[data-arc-end="${arc.chapterEnd}"]`);
+                    if (errorArcItem) {
+                        const errorBtn = errorArcItem.querySelector('.rmr-arc-item-btn');
+                        if (errorBtn) {
+                            errorBtn.textContent = 'Create Chapter Here';
+                            errorBtn.disabled = false;
+                        }
+                    }
+                }
             } finally {
-                // Hide loading state
-                loadingEl.classList.remove('active');
-                popupEl.classList.remove('loading');
+                // Clear summarization state
+                arcSessionState.summarizingArcEnd = null;
+
+                // Hide loading state (use current overlay)
+                const currentOverlay = arcSessionState.currentOverlay;
+                if (currentOverlay && document.body.contains(currentOverlay)) {
+                    const loadingEl = currentOverlay.querySelector('#rmr-arc-loading');
+                    const popupEl = currentOverlay.querySelector('.rmr-arc-popup');
+                    if (loadingEl) loadingEl.classList.remove('active');
+                    if (popupEl) popupEl.classList.remove('loading');
+                }
             }
         });
 
         arcListEl.appendChild(arcItem);
     }
 
-    // Close button handler
-    overlayEl.querySelector('.rmr-arc-popup-close').addEventListener('click', () => {
-        overlayEl.remove();
+    // Re-analyze button handler with smooth animation
+    const reanalyzeBtn = overlayEl.querySelector('.rmr-arc-reanalyze-btn');
+    reanalyzeBtn.addEventListener('click', async () => {
+        const loadingEl = overlayEl.querySelector('#rmr-arc-loading');
+        const popupEl = overlayEl.querySelector('.rmr-arc-popup');
+        const loadingText = loadingEl.querySelector('span');
+
+        // Prevent re-analyze during summarization
+        if (arcSessionState.summarizingArcEnd !== null) {
+            toastr.warning(translate('Please wait for current summarization to complete', 'rmr_arc_wait_summarization'), 'Arc Analyzer');
+            return;
+        }
+
+        try {
+            // Disable re-analyze button during operation
+            reanalyzeBtn.disabled = true;
+
+            // Show re-analyzing loading state
+            loadingText.textContent = translate('Re-analyzing arcs...', 'rmr_arc_reanalyzing');
+            loadingEl.classList.add('active');
+            popupEl.classList.add('loading');
+
+            // Fade out existing arc items
+            const existingItems = arcListEl.querySelectorAll('.rmr-arc-item');
+            existingItems.forEach(item => {
+                item.classList.add('fade-out');
+            });
+
+            // Wait for fade-out animation
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Mark as internal generation
+            isInternalGeneration = true;
+
+            // Fetch new arcs from API
+            const newArcs = await fetchArcsFromAPI();
+
+            // Get current position info
+            const newFirstVisible = findFirstVisibleMessageIndex();
+            const newMostRecent = getMostRecentMessageId();
+
+            // Filter arcs for valid range
+            const filteredArcs = newArcs.filter(arc => {
+                const messageCount = arc.chapterEnd - newFirstVisible + 1;
+                return messageCount > 0;
+            });
+
+            // Update session state
+            const context = getContext();
+            arcSessionState.chatId = context.getCurrentChatId?.() || null;
+            arcSessionState.arcs = filteredArcs;
+            arcSessionState.completedArcEnds = new Set();
+
+            // Update position info in header
+            const firstVisibleEl = overlayEl.querySelector('#rmr-arc-first-visible');
+            const mostRecentEl = overlayEl.querySelector('#rmr-arc-most-recent');
+            if (firstVisibleEl) firstVisibleEl.textContent = newFirstVisible;
+            if (mostRecentEl) mostRecentEl.textContent = newMostRecent;
+
+            // Clear existing arc list
+            arcListEl.innerHTML = '';
+
+            if (filteredArcs.length === 0) {
+                // Show empty state
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'rmr-arc-empty fade-in';
+                emptyEl.textContent = translate('No valid arcs found. Try adjusting your prompts.', 'rmr_arc_no_valid');
+                arcListEl.appendChild(emptyEl);
+            } else {
+                // Rebuild arc items with staggered fade-in
+                filteredArcs.forEach((arc, index) => {
+                    const messageCount = arc.chapterEnd - newFirstVisible + 1;
+                    const arcItem = document.createElement('div');
+                    arcItem.className = 'rmr-arc-item fade-in';
+                    arcItem.dataset.arcEnd = arc.chapterEnd;
+                    arcItem.style.animationDelay = `${index * 50}ms`;
+                    arcItem.innerHTML = `
+                        <div class="rmr-arc-item-header">
+                            <span class="rmr-arc-item-title">${_sanitize(arc.title)}</span>
+                            <span class="rmr-arc-item-meta">
+                                End @ <strong>${arc.chapterEnd}</strong>
+                                (<span class="rmr-arc-item-count">${messageCount}</span> messages)
+                            </span>
+                        </div>
+                        <div class="rmr-arc-item-summary">${_sanitize(arc.summary)}</div>
+                        ${arc.justification ? `<div class="rmr-arc-item-justification"><i>${_sanitize(arc.justification)}</i></div>` : ''}
+                        <button class="menu_button rmr-arc-item-btn">Create Chapter Here</button>
+                    `;
+
+                    // Button click handler (same logic as original, using currentOverlay for updates)
+                    const btn = arcItem.querySelector('.rmr-arc-item-btn');
+                    btn.addEventListener('click', async () => {
+                        if (arcSessionState.summarizingArcEnd !== null) return;
+
+                        const innerLoadingEl = overlayEl.querySelector('#rmr-arc-loading');
+                        const innerPopupEl = overlayEl.querySelector('.rmr-arc-popup');
+                        const innerLoadingText = innerLoadingEl?.querySelector('span');
+
+                        try {
+                            const mesId = Number(arc.chapterEnd);
+                            const mesEl = $(`.mes[mesid="${mesId}"]`);
+                            if (!mesEl || mesEl.length === 0) {
+                                toastr.error(`Message ${mesId} not found.`, 'Arc Analyzer');
+                                return;
+                            }
+
+                            arcSessionState.summarizingArcEnd = arc.chapterEnd;
+                            if (innerLoadingText) innerLoadingText.textContent = 'Summarizing chapter...';
+                            if (innerLoadingEl) innerLoadingEl.classList.add('active');
+                            if (innerPopupEl) innerPopupEl.classList.add('loading');
+                            btn.textContent = 'Summarizing...';
+                            btn.disabled = true;
+
+                            const options = {};
+                            if (settings.profile) options.profile = settings.profile;
+                            await summarizeChapter(mesEl, options);
+
+                            arcSessionState.completedArcEnds.add(arc.chapterEnd);
+
+                            const updatedFirstVisible = findFirstVisibleMessageIndex();
+                            const updatedMostRecent = getMostRecentMessageId();
+
+                            arcSessionState.arcs = arcSessionState.arcs.filter(a => {
+                                const count = a.chapterEnd - updatedFirstVisible + 1;
+                                return count > 0;
+                            });
+
+                            // Use currentOverlay for updates (may be different if user closed/reopened)
+                            const currentOverlay = arcSessionState.currentOverlay;
+                            if (currentOverlay && document.body.contains(currentOverlay)) {
+                                const fvEl = currentOverlay.querySelector('#rmr-arc-first-visible');
+                                const mrEl = currentOverlay.querySelector('#rmr-arc-most-recent');
+                                if (fvEl) fvEl.textContent = updatedFirstVisible;
+                                if (mrEl) mrEl.textContent = updatedMostRecent;
+
+                                currentOverlay.querySelectorAll('.rmr-arc-item').forEach(item => {
+                                    const arcEnd = parseInt(item.dataset.arcEnd, 10);
+                                    const newCount = arcEnd - updatedFirstVisible + 1;
+                                    if (newCount <= 0) {
+                                        item.classList.add('fade-out');
+                                        setTimeout(() => item.remove(), 200);
+                                        return;
+                                    }
+                                    const countEl = item.querySelector('.rmr-arc-item-count');
+                                    if (countEl) countEl.textContent = newCount;
+                                });
+
+                                // Find and mark the completed arc in current overlay
+                                const completedArcItem = currentOverlay.querySelector(`.rmr-arc-item[data-arc-end="${arc.chapterEnd}"]`);
+                                if (completedArcItem) {
+                                    completedArcItem.classList.add('completed');
+                                    const completedBtn = completedArcItem.querySelector('.rmr-arc-item-btn');
+                                    if (completedBtn) {
+                                        completedBtn.textContent = '✓ Completed';
+                                        completedBtn.disabled = true;
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Arc apply error:', err);
+                            toastr.error('Failed to apply chapter end', 'Arc Analyzer');
+                            const currentOverlay = arcSessionState.currentOverlay;
+                            if (currentOverlay && document.body.contains(currentOverlay)) {
+                                const errorArcItem = currentOverlay.querySelector(`.rmr-arc-item[data-arc-end="${arc.chapterEnd}"]`);
+                                if (errorArcItem) {
+                                    const errorBtn = errorArcItem.querySelector('.rmr-arc-item-btn');
+                                    if (errorBtn) {
+                                        errorBtn.textContent = 'Create Chapter Here';
+                                        errorBtn.disabled = false;
+                                    }
+                                }
+                            }
+                        } finally {
+                            arcSessionState.summarizingArcEnd = null;
+                            const currentOverlay = arcSessionState.currentOverlay;
+                            if (currentOverlay && document.body.contains(currentOverlay)) {
+                                const el = currentOverlay.querySelector('#rmr-arc-loading');
+                                const pel = currentOverlay.querySelector('.rmr-arc-popup');
+                                if (el) el.classList.remove('active');
+                                if (pel) pel.classList.remove('loading');
+                            }
+                        }
+                    });
+
+                    arcListEl.appendChild(arcItem);
+                });
+            }
+
+            doneToast(translate('Arcs re-analyzed', 'rmr_arc_reanalyzed'));
+
+        } catch (err) {
+            console.error('Re-analyze error:', err);
+            toastr.error('Failed to re-analyze arcs', 'Arc Analyzer');
+        } finally {
+            isInternalGeneration = false;
+            reanalyzeBtn.disabled = false;
+            loadingText.textContent = 'Summarizing chapter...';
+            loadingEl.classList.remove('active');
+            popupEl.classList.remove('loading');
+        }
     });
+
+    // Helper to close and unregister overlay
+    const closeOverlay = () => {
+        arcSessionState.currentOverlay = null;
+        overlayEl.remove();
+    };
+
+    // Close button handler
+    overlayEl.querySelector('.rmr-arc-popup-close').addEventListener('click', closeOverlay);
 
     // Click outside to close
     overlayEl.addEventListener('click', (e) => {
         if (e.target === overlayEl) {
-            overlayEl.remove();
+            closeOverlay();
         }
     });
 
     // ESC key to close
     const escHandler = (e) => {
         if (e.key === 'Escape') {
-            overlayEl.remove();
+            closeOverlay();
             document.removeEventListener('keydown', escHandler);
         }
     };
     document.addEventListener('keydown', escHandler);
 
-    // Add to DOM
+    // Register as current overlay and add to DOM
+    arcSessionState.currentOverlay = overlayEl;
     document.body.appendChild(overlayEl);
 }
 
-export async function analyzeArcs(profileOverride = null) {
+export async function analyzeArcs(profileOverride = null, forceReanalyze = false) {
+    const context = getContext();
+    const currentChatId = context.getCurrentChatId?.() || null;
+
+    // Check if we have valid session state for this chat (and not forcing re-analysis)
+    if (!forceReanalyze &&
+        arcSessionState.chatId === currentChatId &&
+        arcSessionState.arcs.length > 0) {
+        // Reuse existing arcs - show popup and continue from where left off
+        infoToast(translate('Resuming arc analyzer...', 'rmr_arc_resuming'));
+        await showArcPopup(arcSessionState.arcs);
+        return;
+    }
+
     // Mark as internal generation to prevent timeline injection
     isInternalGeneration = true;
 
     try {
-        const context = getContext();
         const profileId = profileOverride || settings.arc_profile;
         if (!profileId) {
             toastr.error('Select an Arc Analyzer profile first', 'Timeline Memory');
@@ -2291,6 +2669,12 @@ export async function analyzeArcs(profileOverride = null) {
         if (!arcs.length) {
             toastr.warning('No valid arc entries found in output', 'Arc Analyzer');
         }
+
+        // Store arcs in session state
+        arcSessionState.chatId = currentChatId;
+        arcSessionState.arcs = arcs;
+        // Reset completed arcs on fresh analysis
+        arcSessionState.completedArcEnds = new Set();
 
         await showArcPopup(arcs);
     } catch (err) {

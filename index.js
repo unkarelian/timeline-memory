@@ -3,7 +3,7 @@ import { getContext } from "../../../extensions.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
 import { loadSettings, changeCharaName, renderSummariesList, settings } from "./src/settings.js";
-import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection } from "./src/memories.js";
+import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection, resetArcSessionState } from "./src/memories.js";
 import { showRetrievalProgress, hideRetrievalProgress } from "./src/retrieval-progress.js";
 import { loadUITranslations } from "./src/locales.js";
 
@@ -207,6 +207,8 @@ jQuery(async () => {
 			} catch (err) {
 				// Module might not be loaded yet, ignore
 			}
+			// Reset arc analyzer session state when chat changes
+			resetArcSessionState();
 			loadTimelineData();
 			resetMessageButtons();
 			renderSummariesList();

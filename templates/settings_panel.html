@@ -678,6 +678,30 @@
 	opacity: 1;
 }
 
+.rmr-arc-popup-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+}
+
+.rmr-arc-reanalyze-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	font-size: 12px;
+	opacity: 0.9;
+}
+
+.rmr-arc-reanalyze-btn:hover {
+	opacity: 1;
+}
+
+.rmr-arc-reanalyze-btn i {
+	font-size: 11px;
+}
+
 .rmr-arc-popup-body {
 	flex: 1;
 	padding: 16px;
@@ -783,6 +807,57 @@
 	color: var(--SmartThemeEmColor);
 }
 
+/* Arc item animations */
+.rmr-arc-item.fade-out {
+	animation: arcFadeOut 0.2s ease-out forwards;
+}
+
+.rmr-arc-item.fade-in {
+	animation: arcFadeIn 0.3s ease-out forwards;
+	opacity: 0;
+}
+
+@keyframes arcFadeOut {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+}
+
+@keyframes arcFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Empty state message */
+.rmr-arc-empty {
+	text-align: center;
+	padding: 24px;
+	color: var(--SmartThemeQuoteColor);
+	font-style: italic;
+}
+
+.rmr-arc-empty.fade-in {
+	animation: arcFadeIn 0.3s ease-out forwards;
+	opacity: 0;
+}
+
+/* Re-analyze button disabled state */
+.rmr-arc-reanalyze-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
 /* Mobile responsive styles for Arc Analyzer Popup */
 @media (max-width: 768px) {
 	.rmr-arc-popup-overlay {
@@ -826,6 +901,18 @@
 		font-size: 24px;
 		padding: 8px 12px;
 		z-index: 5;
+	}
+
+	.rmr-arc-popup-actions {
+		position: absolute;
+		top: 8px;
+		right: 48px;
+		margin-left: 0;
+	}
+
+	.rmr-arc-reanalyze-btn {
+		padding: 6px 10px;
+		font-size: 11px;
 	}
 
 	.rmr-arc-popup-body {
