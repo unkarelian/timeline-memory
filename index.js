@@ -44,7 +44,10 @@ function initQuickReplyButtons() {
 		<div id="rmr-retrieve-send"
 			class="fa-solid fa-comment-dots rmr-quick-reply-btn interactable"
 			title="Retrieve and Send - Send message with timeline context"
-			tabindex="0">
+			data-i18n="[title]Retrieve and Send - Send message with timeline context"
+			tabindex="0"
+			role="button"
+			aria-label="Retrieve and Send">
 		</div>
 	`);
 
@@ -53,7 +56,10 @@ function initQuickReplyButtons() {
 		<div id="rmr-retrieve-swipe"
 			class="fa-solid fa-rotate rmr-quick-reply-btn interactable"
 			title="Retrieve and Swipe - Refresh with timeline context"
-			tabindex="0">
+			data-i18n="[title]Retrieve and Swipe - Refresh with timeline context"
+			tabindex="0"
+			role="button"
+			aria-label="Retrieve and Swipe">
 		</div>
 	`);
 
