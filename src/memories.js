@@ -996,7 +996,7 @@ async function swapProfile(profileId = null) {
 	return swapped;
 }
 
-async function genSummaryWithSlash(history, id=0) {
+async function genSummaryWithSlash(history, id=0, { resummarizeChapterNumber = null } = {}) {
 	// Initialize commandArgs if not set
 	if (!commandArgs) {
 		commandArgs = {};
@@ -1017,7 +1017,26 @@ async function genSummaryWithSlash(history, id=0) {
 			infoToast("Generating summary #"+id+"....");
 		}
 		// Get timeline context for macro replacement
-		const timelineContext = evaluateMacros('{{timeline}}', {});
+		// If resummarizing a chapter, only include chapters before the target (the AI shouldn't know about future events)
+		let timelineContext;
+		if (resummarizeChapterNumber !== null && timelineData && timelineData.length > 0) {
+			const chapterIndex = resummarizeChapterNumber - 1;
+			// Only include chapters before the target chapter
+			const modifiedTimeline = timelineData.slice(0, chapterIndex).map((chapter, index) => {
+				return {
+					chapter_id: index + 1,
+					message_range: {
+						start: chapter.startMsgId,
+						end: chapter.endMsgId
+					},
+					summary: chapter.summary
+				};
+			});
+			// Stringify to match the format evaluateMacros would produce
+			timelineContext = JSON.stringify(modifiedTimeline);
+		} else {
+			timelineContext = evaluateMacros('{{timeline}}', {});
+		}
 
 		const prompt_text = settings.memory_prompt_template.replace('{{content}}', history.trim());
 
@@ -1833,7 +1852,7 @@ export async function queryChapters(startChapter, endChapter, query) {
 	}
 }
 
-async function summarizeHistoryEntries(message_history, { targetMessageId, hideAfter = false } = {}) {
+async function summarizeHistoryEntries(message_history, { targetMessageId, hideAfter = false, resummarizeChapterNumber = null } = {}) {
 	if (!Array.isArray(message_history) || message_history.length === 0) {
 		oopsToast("No visible chapter content! Skipping summary.");
 		return "";
@@ -1871,7 +1890,7 @@ async function summarizeHistoryEntries(message_history, { targetMessageId, hideA
 		const chunk_sums = [];
 		let cid = 0;
 		while (cid < chunks.length) {
-			const chunk_sum = await genSummaryWithSlash(chunks[cid], Number(cid) + 1);
+			const chunk_sum = await genSummaryWithSlash(chunks[cid], Number(cid) + 1, { resummarizeChapterNumber });
 			if (chunk_sum.length > 0) {
 				chunk_sums.push(chunk_sum);
 				cid++;
@@ -1898,7 +1917,7 @@ async function summarizeHistoryEntries(message_history, { targetMessageId, hideA
 	}
 
 	infoToast("Generating chapter summary....");
-	const result = await genSummaryWithSlash(final_context);
+	const result = await genSummaryWithSlash(final_context, 0, { resummarizeChapterNumber });
 	const trimmedResult = typeof result === 'string' ? result.trim() : '';
 
 	if (trimmedResult.length > 0 && hideAfter && settings.hide_chapter) {
@@ -2014,7 +2033,7 @@ export async function resummarizeChapter(chapterNumber, options = {}) {
 		};
 	}));
 
-	const summary = await summarizeHistoryEntries(processedHistory, { targetMessageId: endIdx, hideAfter: false });
+	const summary = await summarizeHistoryEntries(processedHistory, { targetMessageId: endIdx, hideAfter: false, resummarizeChapterNumber: chapterNumber });
 	if (!summary.length) {
 		return "";
 	}
