@@ -154,14 +154,166 @@
   }
 }
 
-/* Mobile responsive */
-@media (max-width: 500px) {
-  #rmr-tutorial-popup {
-    width: calc(100vw - 20px);
-    right: 10px !important;
-    left: 10px !important;
-    bottom: 10px !important;
-  }
+/* ===============================================
+   Mobile Tutorial - Compact Floating Card
+   =============================================== */
+
+/* Mobile tutorial popup - compact floating card */
+#rmr-tutorial-popup.rmr-tutorial-mobile {
+  border-radius: 12px !important;
+  z-index: 99999 !important;
+}
+
+/* Mobile header - compact single line */
+.rmr-tutorial-mobile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--SmartThemeBorderColor, #444);
+}
+
+.rmr-tutorial-mobile-header .rmr-tutorial-step-indicator {
+  background: var(--SmartThemeEmColor, #ffa07a);
+  color: var(--SmartThemeBlurTintColor, #1a1a2e);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rmr-tutorial-mobile-header .rmr-tutorial-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--SmartThemeEmColor, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rmr-tutorial-mobile-header .rmr-tutorial-close {
+  background: none;
+  border: none;
+  color: var(--SmartThemeBodyColor, #aaa);
+  padding: 4px 8px;
+  font-size: 14px;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.rmr-tutorial-mobile-header .rmr-tutorial-close:active {
+  opacity: 1;
+}
+
+/* Mobile content area */
+.rmr-tutorial-mobile-content {
+  display: flex;
+  flex-direction: column;
+}
+
+#rmr-tutorial-popup.rmr-tutorial-mobile .rmr-tutorial-body {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 30vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Mobile navigation - inline with content */
+.rmr-tutorial-mobile-nav {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px 12px;
+  gap: 10px;
+}
+
+.rmr-tutorial-mobile-nav .rmr-tutorial-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  min-height: 40px;
+  font-size: 14px;
+  border-radius: 8px !important;
+}
+
+.rmr-tutorial-mobile-nav .rmr-tutorial-prev {
+  opacity: 0.7;
+}
+
+.rmr-tutorial-mobile-nav .rmr-tutorial-next {
+  background: var(--SmartThemeEmColor, #ffa07a) !important;
+  color: var(--SmartThemeBlurTintColor, #1a1a2e) !important;
+}
+
+/* Touch feedback */
+.rmr-tutorial-mobile-nav .rmr-tutorial-btn:active {
+  transform: scale(0.96);
+  opacity: 0.8;
+}
+
+/* Pointer/arrow indicating highlighted element */
+.rmr-tutorial-mobile-pointer {
+  display: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+}
+
+.rmr-tutorial-mobile-pointer.pointer-bottom {
+  display: block;
+  bottom: -10px;
+  border-top: 10px solid var(--SmartThemeBlurTintColor, #1e1e2e);
+}
+
+.rmr-tutorial-mobile-pointer.pointer-top {
+  display: block;
+  top: -10px;
+  border-bottom: 10px solid var(--SmartThemeBlurTintColor, #1e1e2e);
+}
+
+/* Hide desktop elements on mobile */
+#rmr-tutorial-popup.rmr-tutorial-mobile .rmr-tutorial-header:not(.rmr-tutorial-mobile-header),
+#rmr-tutorial-popup.rmr-tutorial-mobile .rmr-tutorial-footer:not(.rmr-tutorial-mobile-nav) {
+  display: none;
+}
+
+/* Mobile backdrop - subtle */
+#rmr-tutorial-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 99998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#rmr-tutorial-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Safe area support for iOS */
+#rmr-tutorial-popup.rmr-tutorial-mobile.position-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+#rmr-tutorial-popup.rmr-tutorial-mobile.position-top {
+  padding-top: env(safe-area-inset-top, 0);
 }
 
 /* Quick Reply Buttons in Send Form */

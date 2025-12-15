@@ -393,8 +393,10 @@ You can restart this tutorial anytime from the settings panel.
 let currentStep = 0;
 let isActive = false;
 let tutorialPopup = null;
+let tutorialBackdrop = null;
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
+let isMobile = false;
 
 // Get translated text for a step
 function getStepTitle(step) {
@@ -410,6 +412,30 @@ function getButtonText(key, fallback) {
     return getTutorialText(key, fallback);
 }
 
+// Check if we're on mobile
+function checkMobile() {
+    // Check screen width and also verify it's likely a mobile device
+    const isNarrowScreen = window.innerWidth <= 768;
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    // Only use mobile layout if both narrow AND touch, or if very narrow
+    return (isNarrowScreen && isTouchDevice) || window.innerWidth <= 500;
+}
+
+// Handle window resize/orientation change
+function onResize() {
+    if (!isActive || !tutorialPopup) return;
+
+    const wasMobile = isMobile;
+    isMobile = checkMobile();
+
+    // If mode changed, recreate the popup
+    if (wasMobile !== isMobile) {
+        removePopup();
+        createPopup();
+        showStep(currentStep);
+    }
+}
+
 // Start the tutorial
 export async function startTutorial(fromStep = 0) {
     if (isActive) return;
@@ -417,8 +443,12 @@ export async function startTutorial(fromStep = 0) {
     // Load translations before starting
     await loadTutorialTranslations();
 
+    isMobile = checkMobile();
     currentStep = fromStep;
     isActive = true;
+
+    // Listen for orientation/resize changes
+    window.addEventListener('resize', onResize);
 
     createPopup();
     showStep(currentStep);
@@ -429,6 +459,9 @@ export function endTutorial(completed = true) {
     if (!isActive) return;
 
     isActive = false;
+
+    // Remove resize listener
+    window.removeEventListener('resize', onResize);
 
     if (completed) {
         markTutorialCompleted();
@@ -447,30 +480,142 @@ function createPopup() {
 
     tutorialPopup = document.createElement('div');
     tutorialPopup.id = 'rmr-tutorial-popup';
-    tutorialPopup.innerHTML = `
-        <div class="rmr-tutorial-header" id="rmr-tutorial-drag-handle">
-            <span class="rmr-tutorial-title"></span>
-            <span class="rmr-tutorial-step-indicator"></span>
-            <button class="rmr-tutorial-close" title="Close tutorial">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="rmr-tutorial-body"></div>
-        <div class="rmr-tutorial-footer">
-            <button class="rmr-tutorial-btn rmr-tutorial-prev menu_button">
-                <i class="fa-solid fa-arrow-left"></i> ${backText}
-            </button>
-            <button class="rmr-tutorial-btn rmr-tutorial-next menu_button">
-                ${nextText} <i class="fa-solid fa-arrow-right"></i>
-            </button>
-        </div>
-    `;
+
+    if (isMobile) {
+        tutorialPopup.classList.add('rmr-tutorial-mobile');
+        tutorialPopup.innerHTML = `
+            <div class="rmr-tutorial-mobile-header">
+                <span class="rmr-tutorial-step-indicator"></span>
+                <span class="rmr-tutorial-title"></span>
+                <button class="rmr-tutorial-close" title="Close tutorial">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="rmr-tutorial-mobile-content">
+                <div class="rmr-tutorial-body"></div>
+                <div class="rmr-tutorial-mobile-nav">
+                    <button class="rmr-tutorial-btn rmr-tutorial-prev menu_button">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button class="rmr-tutorial-btn rmr-tutorial-next menu_button">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="rmr-tutorial-mobile-pointer"></div>
+        `;
+    } else {
+        tutorialPopup.innerHTML = `
+            <div class="rmr-tutorial-header" id="rmr-tutorial-drag-handle">
+                <span class="rmr-tutorial-title"></span>
+                <span class="rmr-tutorial-step-indicator"></span>
+                <button class="rmr-tutorial-close" title="Close tutorial">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="rmr-tutorial-body"></div>
+            <div class="rmr-tutorial-footer">
+                <button class="rmr-tutorial-btn rmr-tutorial-prev menu_button">
+                    <i class="fa-solid fa-arrow-left"></i> ${backText}
+                </button>
+                <button class="rmr-tutorial-btn rmr-tutorial-next menu_button">
+                    ${nextText} <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        `;
+    }
 
     document.body.appendChild(tutorialPopup);
 
-    // Position in bottom-right by default
-    tutorialPopup.style.right = '20px';
-    tutorialPopup.style.bottom = '20px';
+    // Create backdrop for mobile
+    if (isMobile && !tutorialBackdrop) {
+        tutorialBackdrop = document.createElement('div');
+        tutorialBackdrop.id = 'rmr-tutorial-backdrop';
+        document.body.appendChild(tutorialBackdrop);
+
+        // Clicking backdrop collapses the sheet
+        tutorialBackdrop.addEventListener('click', () => {
+            if (isBottomSheetExpanded) {
+                collapseBottomSheet();
+            }
+        });
+
+        // Show backdrop with slight delay for animation
+        requestAnimationFrame(() => {
+            tutorialBackdrop.classList.add('active');
+        });
+    }
+
+    // Position based on mode
+    if (isMobile) {
+        // For mobile, position dynamically based on highlighted element
+        // Use absolute positioning since fixed is broken in SillyTavern mobile
+        const positionMobilePopup = (highlightedElement = null) => {
+            if (!tutorialPopup) return;
+
+            const viewportHeight = window.innerHeight;
+            const margin = 10;
+            let positionAtTop = true; // Default to top
+
+            if (highlightedElement) {
+                const rect = highlightedElement.getBoundingClientRect();
+                const elementCenterY = rect.top + rect.height / 2;
+                // If highlighted element is in top half, put tutorial at bottom
+                positionAtTop = elementCenterY > viewportHeight / 2;
+            }
+
+            // Calculate absolute position
+            const scrollY = window.scrollY || window.pageYOffset;
+            const topValue = positionAtTop ? (scrollY + margin) : (scrollY + viewportHeight - tutorialPopup.offsetHeight - margin);
+
+            tutorialPopup.style.cssText = `
+                position: absolute !important;
+                left: ${margin}px !important;
+                right: ${margin}px !important;
+                top: ${Math.max(scrollY, topValue)}px !important;
+                width: calc(100% - ${margin * 2}px) !important;
+                max-height: 45vh !important;
+                z-index: 99999 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                background: var(--SmartThemeBlurTintColor, #1e1e2e) !important;
+                border: 1px solid var(--SmartThemeBorderColor, #555) !important;
+                border-radius: 12px !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                overflow: hidden !important;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+            `;
+
+            // Update pointer position
+            const pointer = tutorialPopup.querySelector('.rmr-tutorial-mobile-pointer');
+            if (pointer) {
+                pointer.className = `rmr-tutorial-mobile-pointer ${positionAtTop ? 'pointer-bottom' : 'pointer-top'}`;
+            }
+
+            // Toggle class for styling differences
+            tutorialPopup.classList.toggle('position-top', positionAtTop);
+            tutorialPopup.classList.toggle('position-bottom', !positionAtTop);
+        };
+
+        // Initial positioning (no highlight)
+        positionMobilePopup();
+
+        // Reposition after content renders to get correct height
+        requestAnimationFrame(() => positionMobilePopup());
+
+        // Store the function and current highlight for later use
+        tutorialPopup._positionFunc = positionMobilePopup;
+        tutorialPopup._currentHighlight = null;
+
+        // Keep position updated on scroll
+        const onScroll = () => positionMobilePopup(tutorialPopup._currentHighlight);
+        window.addEventListener('scroll', onScroll, { passive: true });
+        tutorialPopup._scrollHandler = onScroll;
+    } else {
+        tutorialPopup.style.right = '20px';
+        tutorialPopup.style.bottom = '20px';
+    }
 
     // Event listeners - stop propagation to prevent clicks from affecting background
     tutorialPopup.querySelector('.rmr-tutorial-close').addEventListener('click', (e) => {
@@ -479,7 +624,10 @@ function createPopup() {
         endTutorial(false);
     });
 
-    tutorialPopup.querySelector('.rmr-tutorial-prev').addEventListener('click', (e) => {
+    const prevBtn = tutorialPopup.querySelector('.rmr-tutorial-prev');
+    const nextBtn = tutorialPopup.querySelector('.rmr-tutorial-next');
+
+    prevBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
         if (currentStep > 0) {
@@ -487,7 +635,7 @@ function createPopup() {
         }
     });
 
-    tutorialPopup.querySelector('.rmr-tutorial-next').addEventListener('click', (e) => {
+    nextBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
         if (currentStep < tutorialSteps.length - 1) {
@@ -506,27 +654,34 @@ function createPopup() {
         e.stopPropagation();
     });
 
-    // Dragging functionality
-    const dragHandle = tutorialPopup.querySelector('#rmr-tutorial-drag-handle');
+    tutorialPopup.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
 
-    dragHandle.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.rmr-tutorial-close')) return;
+    // Desktop: dragging functionality
+    if (!isMobile) {
+        const dragHandle = tutorialPopup.querySelector('#rmr-tutorial-drag-handle');
+        if (dragHandle) {
+            dragHandle.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.rmr-tutorial-close')) return;
 
-        isDragging = true;
-        const rect = tutorialPopup.getBoundingClientRect();
+                isDragging = true;
+                const rect = tutorialPopup.getBoundingClientRect();
 
-        // Switch from right/bottom positioning to left/top for dragging
-        tutorialPopup.style.left = rect.left + 'px';
-        tutorialPopup.style.top = rect.top + 'px';
-        tutorialPopup.style.right = 'auto';
-        tutorialPopup.style.bottom = 'auto';
+                // Switch from right/bottom positioning to left/top for dragging
+                tutorialPopup.style.left = rect.left + 'px';
+                tutorialPopup.style.top = rect.top + 'px';
+                tutorialPopup.style.right = 'auto';
+                tutorialPopup.style.bottom = 'auto';
 
-        dragOffset.x = e.clientX - rect.left;
-        dragOffset.y = e.clientY - rect.top;
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
 
-        document.addEventListener('mousemove', onDrag);
-        document.addEventListener('mouseup', onDragEnd);
-    });
+                document.addEventListener('mousemove', onDrag);
+                document.addEventListener('mouseup', onDragEnd);
+            });
+        }
+    }
 }
 
 function onDrag(e) {
@@ -547,7 +702,15 @@ function onDragEnd() {
 
 // Remove popup
 function removePopup() {
+    if (tutorialBackdrop) {
+        tutorialBackdrop.remove();
+        tutorialBackdrop = null;
+    }
     if (tutorialPopup) {
+        // Clean up scroll handler
+        if (tutorialPopup._scrollHandler) {
+            window.removeEventListener('scroll', tutorialPopup._scrollHandler);
+        }
         tutorialPopup.remove();
         tutorialPopup = null;
     }
@@ -572,12 +735,22 @@ function showStep(stepIndex) {
 
     prevBtn.style.visibility = stepIndex === 0 ? 'hidden' : 'visible';
 
-    if (stepIndex === tutorialSteps.length - 1) {
-        const finishText = getButtonText('tutorial_btn_finish', 'Finish');
-        nextBtn.innerHTML = `${finishText} <i class="fa-solid fa-check"></i>`;
+    if (isMobile) {
+        // Mobile: icon-only buttons
+        if (stepIndex === tutorialSteps.length - 1) {
+            nextBtn.innerHTML = `<i class="fa-solid fa-check"></i>`;
+        } else {
+            nextBtn.innerHTML = `<i class="fa-solid fa-chevron-right"></i>`;
+        }
     } else {
-        const nextText = getButtonText('tutorial_btn_next', 'Next');
-        nextBtn.innerHTML = `${nextText} <i class="fa-solid fa-arrow-right"></i>`;
+        // Desktop: text + icon buttons
+        if (stepIndex === tutorialSteps.length - 1) {
+            const finishText = getButtonText('tutorial_btn_finish', 'Finish');
+            nextBtn.innerHTML = `${finishText} <i class="fa-solid fa-check"></i>`;
+        } else {
+            const nextText = getButtonText('tutorial_btn_next', 'Next');
+            nextBtn.innerHTML = `${nextText} <i class="fa-solid fa-arrow-right"></i>`;
+        }
     }
 
     // Handle highlighting
@@ -587,8 +760,86 @@ function showStep(stepIndex) {
         const element = document.querySelector(step.highlight);
         if (element) {
             highlightElement(element);
-            // Scroll element into view
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            if (isMobile) {
+                // Store the highlight reference and reposition
+                if (tutorialPopup) {
+                    tutorialPopup._currentHighlight = element;
+                    if (tutorialPopup._positionFunc) {
+                        tutorialPopup._positionFunc(element);
+                    }
+                }
+
+                // Scroll element into view after a short delay to let positioning settle
+                setTimeout(() => {
+                    if (!tutorialPopup) return;
+
+                    // Skip scrolling for elements that cause UI issues on mobile
+                    const skipScrollSelectors = ['#rmr-retrieve-send', '#rmr-retrieve-swipe'];
+                    if (skipScrollSelectors.includes(step.highlight)) {
+                        return;
+                    }
+
+                    // Find the scrollable parent container (SillyTavern uses specific containers)
+                    const findScrollableParent = (el) => {
+                        let parent = el.parentElement;
+                        while (parent) {
+                            const style = window.getComputedStyle(parent);
+                            const overflowY = style.overflowY;
+                            const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') &&
+                                                  parent.scrollHeight > parent.clientHeight;
+                            if (isScrollable) {
+                                return parent;
+                            }
+                            parent = parent.parentElement;
+                        }
+                        return null;
+                    };
+
+                    const scrollContainer = findScrollableParent(element);
+
+                    if (scrollContainer) {
+                        // Scroll within the container
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        const elementRect = element.getBoundingClientRect();
+                        const tutorialHeight = tutorialPopup.offsetHeight || 200;
+                        const padding = 20;
+                        const tutorialAtTop = tutorialPopup.classList.contains('position-top');
+
+                        // Calculate offset within container
+                        const elementOffsetInContainer = elementRect.top - containerRect.top + scrollContainer.scrollTop;
+
+                        // Calculate target scroll position
+                        let targetScroll;
+                        if (tutorialAtTop) {
+                            // Tutorial at top - scroll element to be visible below tutorial area
+                            targetScroll = elementOffsetInContainer - tutorialHeight - padding;
+                        } else {
+                            // Tutorial at bottom - scroll element to upper portion
+                            targetScroll = elementOffsetInContainer - padding;
+                        }
+
+                        scrollContainer.scrollTo({
+                            top: Math.max(0, targetScroll),
+                            behavior: 'smooth'
+                        });
+                    } else {
+                        // Fallback to scrollIntoView
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            } else {
+                // Desktop: center the element
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    } else {
+        // No highlight - reposition to default (top)
+        if (isMobile && tutorialPopup) {
+            tutorialPopup._currentHighlight = null;
+            if (tutorialPopup._positionFunc) {
+                tutorialPopup._positionFunc(null);
+            }
         }
     }
 }
