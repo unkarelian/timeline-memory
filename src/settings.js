@@ -1900,6 +1900,7 @@ export async function renderSummariesList() {
 		const chapterNum = index + 1;
 		const startMsg = chapter.startMsgId === 0 ? 0 : chapter.startMsgId + 1;
 		const endMsg = chapter.endMsgId;
+		const isLastChapter = chapterNum === timeline.length;
 
 		const summaryItem = $(`
 			<div class="rmr-summary-item" data-chapter="${chapterNum}">
@@ -1912,6 +1913,8 @@ export async function renderSummariesList() {
 				</div>
 				<textarea class="rmr-summary-text text_pole" data-chapter="${chapterNum}">${escapeHtml(chapter.summary || '')}</textarea>
 				<div class="rmr-summary-actions">
+					${isLastChapter ? `<button type="button" class="menu_button rmr-remove-summary" data-chapter="${chapterNum}" data-end-msg="${endMsg}" data-i18n="rmr_remove">Remove</button>` : ''}
+					<button type="button" class="menu_button rmr-resummarize" data-chapter="${chapterNum}" data-i18n="rmr_resummarize">Resummarize</button>
 					<button type="button" class="menu_button rmr-save-summary" data-chapter="${chapterNum}" disabled>Save</button>
 				</div>
 			</div>
@@ -1950,6 +1953,62 @@ export async function renderSummariesList() {
 		}
 	});
 
+	// Handle inline remove button clicks (only for most recent chapter)
+	container.find('.rmr-remove-summary').on('click', async function() {
+		const chapterNum = $(this).data('chapter');
+		const endMsgId = $(this).data('end-msg');
+		const { removeChapterFromTimeline } = await import('./memories.js');
+
+		// Remove chapter marker from chat
+		const chat = getContext().chat;
+		if (chat?.[endMsgId]?.extra?.rmr_chapter) {
+			chat[endMsgId].extra.rmr_chapter = false;
+			getContext().saveChat();
+		}
+
+		// Remove from timeline
+		const removed = removeChapterFromTimeline(endMsgId);
+
+		if (removed) {
+			// Update message button if visible
+			const button = $(`.mes[mesid="${endMsgId}"] .rmr-button.rmr-chapter-point`);
+			if (button.length) {
+				button.removeClass('active');
+			}
+
+			toastr.success(`Chapter ${chapterNum} removed from timeline`, 'Timeline Memory');
+			renderSummariesList();
+		} else {
+			toastr.error('Failed to remove chapter', 'Timeline Memory');
+		}
+	});
+
+	// Handle inline resummarize button clicks
+	container.find('.rmr-resummarize').on('click', async function() {
+		const btn = $(this);
+		const chapterNum = btn.data('chapter');
+		const textarea = container.find(`.rmr-summary-text[data-chapter="${chapterNum}"]`);
+
+		// Disable button and show loading state
+		btn.prop('disabled', true);
+		const originalText = btn.text();
+		btn.html('<i class="fa-solid fa-spinner fa-spin"></i>');
+
+		try {
+			const { resummarizeChapter } = await import('./memories.js');
+			const newSummary = await resummarizeChapter(chapterNum);
+
+			if (newSummary) {
+				textarea.val(newSummary);
+				textarea.data('original', newSummary);
+				container.find(`.rmr-save-summary[data-chapter="${chapterNum}"]`).prop('disabled', true);
+			}
+		} finally {
+			btn.prop('disabled', false);
+			btn.text(originalText);
+		}
+	});
+
 	// Handle expand button clicks to open popup
 	container.find('.rmr-summary-expand').on('click', function() {
 		const chapterNum = $(this).data('chapter');
@@ -1957,16 +2016,18 @@ export async function renderSummariesList() {
 		const endMsg = $(this).data('end');
 		const textarea = container.find(`.rmr-summary-text[data-chapter="${chapterNum}"]`);
 		const currentText = textarea.val();
+		const isLastChapter = chapterNum === timeline.length;
 
-		openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapterSummary);
+		openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapterSummary, isLastChapter);
 	});
 }
 
 // Open the fullscreen summary popup
-function openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapterSummary) {
+async function openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapterSummary, isLastChapter = false) {
 	const popup = $('#rmr_summary_popup');
 	const popupTextarea = $('#rmr_popup_textarea');
 	const saveBtn = $('#rmr_popup_save');
+	const removeBtn = $('#rmr_popup_remove');
 
 	// Set popup content
 	$('#rmr_popup_chapter_num').text(chapterNum);
@@ -1975,6 +2036,13 @@ function openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapt
 	popupTextarea.data('original', currentText);
 	popupTextarea.data('chapter', chapterNum);
 	saveBtn.prop('disabled', true);
+
+	// Show/hide remove button based on whether this is the last chapter
+	if (isLastChapter) {
+		removeBtn.show();
+	} else {
+		removeBtn.hide();
+	}
 
 	// Show popup
 	popup.css('display', 'flex');
@@ -2016,6 +2084,79 @@ function openSummaryPopup(chapterNum, startMsg, endMsg, currentText, updateChapt
 	// Handle cancel/close
 	$('#rmr_popup_cancel').off('click').on('click', closeSummaryPopup);
 	$('#rmr_popup_close').off('click').on('click', closeSummaryPopup);
+
+	// Handle remove button (only for most recent chapter)
+	$('#rmr_popup_remove').off('click').on('click', async function() {
+		const chapter = popupTextarea.data('chapter');
+		const { removeChapterFromTimeline, getTimelineEntries } = await import('./memories.js');
+		const timeline = getTimelineEntries();
+
+		if (!timeline || timeline.length === 0) {
+			toastr.error('No chapters in timeline', 'Timeline Memory');
+			return;
+		}
+
+		const chapterData = timeline[chapter - 1];
+		if (!chapterData) {
+			toastr.error('Chapter not found', 'Timeline Memory');
+			return;
+		}
+
+		// Remove chapter marker from chat
+		const chat = getContext().chat;
+		if (chat?.[chapterData.endMsgId]?.extra?.rmr_chapter) {
+			chat[chapterData.endMsgId].extra.rmr_chapter = false;
+			getContext().saveChat();
+		}
+
+		// Remove from timeline
+		const removed = removeChapterFromTimeline(chapterData.endMsgId);
+
+		if (removed) {
+			// Update message button if visible
+			const button = $(`.mes[mesid="${chapterData.endMsgId}"] .rmr-button.rmr-chapter-point`);
+			if (button.length) {
+				button.removeClass('active');
+			}
+
+			toastr.success(`Chapter ${chapter} removed from timeline`, 'Timeline Memory');
+			closeSummaryPopup();
+			renderSummariesList();
+		} else {
+			toastr.error('Failed to remove chapter', 'Timeline Memory');
+		}
+	});
+
+	// Handle popup resummarize button
+	$('#rmr_popup_resummarize').off('click').on('click', async function() {
+		const btn = $(this);
+		const chapter = popupTextarea.data('chapter');
+
+		// Disable button and show loading state
+		btn.prop('disabled', true);
+		const originalText = btn.text();
+		btn.html('<i class="fa-solid fa-spinner fa-spin"></i>');
+
+		try {
+			const { resummarizeChapter } = await import('./memories.js');
+			const newSummary = await resummarizeChapter(chapter);
+
+			if (newSummary) {
+				popupTextarea.val(newSummary);
+				popupTextarea.data('original', newSummary);
+				saveBtn.prop('disabled', true);
+
+				// Also update the inline textarea
+				const inlineTextarea = $(`.rmr-summary-text[data-chapter="${chapter}"]`);
+				inlineTextarea.val(newSummary);
+				inlineTextarea.data('original', newSummary);
+				$(`.rmr-save-summary[data-chapter="${chapter}"]`).prop('disabled', true);
+			}
+		} finally {
+			btn.prop('disabled', false);
+			btn.text(originalText);
+		}
+	});
 
 	// Handle clicking outside popup to close
 	popup.off('click').on('click', function(e) {

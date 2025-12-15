@@ -107,6 +107,8 @@
     "rmr_chapter": "Capítulo",
     "rmr_enter_summary": "Ingresa el resumen del capítulo...",
     "rmr_cancel": "Cancelar",
+    "rmr_remove": "Eliminar",
+    "rmr_resummarize": "Resumir",
 
     "rmr_api_profiles": "Perfiles de Conexión API",
     "rmr_summarization_profile": "Perfil de Resumen",

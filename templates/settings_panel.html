@@ -169,6 +169,9 @@
 						<textarea id="rmr_popup_textarea" class="rmr-summary-popup-textarea text_pole" data-i18n="[placeholder]rmr_enter_summary" placeholder="Enter chapter summary..."></textarea>
 					</div>
 					<div class="rmr-summary-popup-footer">
+						<button type="button" class="menu_button rmr-popup-remove-btn" id="rmr_popup_remove" style="display: none;" data-i18n="rmr_remove">Remove</button>
+						<div class="rmr-summary-popup-spacer"></div>
+						<button type="button" class="menu_button" id="rmr_popup_resummarize" data-i18n="rmr_resummarize">Resummarize</button>
 						<button type="button" class="menu_button" id="rmr_popup_cancel" data-i18n="rmr_cancel">Cancel</button>
 						<button type="button" class="menu_button" id="rmr_popup_save" disabled data-i18n="rmr_save">Save</button>
 					</div>
@@ -491,6 +494,17 @@
 	cursor: not-allowed;
 }
 
+.rmr-summary-actions .rmr-remove-summary {
+	background-color: #c0392b;
+	color: white;
+	opacity: 0.85;
+}
+
+.rmr-summary-actions .rmr-remove-summary:hover {
+	opacity: 1;
+	background-color: #e74c3c;
+}
+
 .rmr-summary-expand {
 	background: none;
 	border: none;
@@ -593,6 +607,20 @@
 
 .rmr-summary-popup-footer .menu_button {
 	padding: 6px 16px;
+}
+
+.rmr-summary-popup-spacer {
+	flex: 1;
+}
+
+.rmr-popup-remove-btn {
+	background-color: var(--SmartThemeQuoteColor);
+	opacity: 0.8;
+}
+
+.rmr-popup-remove-btn:hover {
+	opacity: 1;
+	background-color: #c0392b;
 }
 
 /* Arc Analyzer Popup Styles */
