@@ -366,7 +366,8 @@ export function registerAgenticTimelineTools() {
         },
         action: async (args) => {
             try {
-                const { queryChapter } = await import('./memories.js');
+                const { queryChapter, loadTimelineData } = await import('./memories.js');
+                loadTimelineData(); // Ensure timeline is loaded
                 const result = await queryChapter(args.chapter, args.query);
                 // Reset retry count on successful tool call
                 agenticTimelineFillState.retryCount = 0;
@@ -421,7 +422,8 @@ export function registerAgenticTimelineTools() {
                     return `Error: Cannot query more than ${limit} chapters at once. Requested ${chapterCount} chapters (${args.start_chapter}-${args.end_chapter}). Please narrow your range.`;
                 }
 
-                const { queryChapters } = await import('./memories.js');
+                const { queryChapters, loadTimelineData } = await import('./memories.js');
+                loadTimelineData(); // Ensure timeline is loaded
                 const result = await queryChapters(args.start_chapter, args.end_chapter, args.query);
                 // Reset retry count on successful tool call
                 agenticTimelineFillState.retryCount = 0;
@@ -466,14 +468,14 @@ export function registerAgenticTimelineTools() {
     context.ToolManager.registerFunctionTool({
         name: 'end_information_retrieval',
         displayName: 'End Information Retrieval',
-        description: 'Signal that you are done retrieving information from the timeline. Call this when you have gathered all necessary information. Provide a summary of the crucial information you have learned.',
+        description: 'Signal that you are done retrieving information from the timeline. Call this when you have gathered all necessary information.',
         stealth: true,
         parameters: {
             type: 'object',
             properties: {
                 final_information: {
                     type: 'string',
-                    description: 'A summary of all the crucial information you have learned from querying the timeline. This will be saved and made available via {{timelineResponses}}.'
+                    description: 'All the information you have been asked to provide. This will be saved and made available via {{timelineResponses}}.'
                 }
             },
             required: ['final_information']

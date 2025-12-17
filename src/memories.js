@@ -1578,10 +1578,25 @@ export async function queryChapter(chapterNumber, query) {
 	isInternalGeneration = true;
 
 	try {
+		// Check if timeline has any chapters
+		if (!timelineData || timelineData.length === 0) {
+			const msg = 'No chapters exist in the timeline yet.';
+			errorToast(msg);
+			return msg;
+		}
+
+		// Check if chapter is within valid range
+		if (chapterNumber < 1 || chapterNumber > timelineData.length) {
+			const msg = `Chapter ${chapterNumber} does not exist. Valid chapter range is 1-${timelineData.length}.`;
+			errorToast(msg);
+			return msg;
+		}
+
 		const chapterHistory = await getChapterHistory(chapterNumber);
 		if (!chapterHistory) {
-			errorToast(`Chapter ${chapterNumber} not found`);
-			return '';
+			const msg = `Chapter ${chapterNumber} not found.`;
+			errorToast(msg);
+			return msg;
 		}
 
 		const chapter = timelineData[chapterNumber - 1];
@@ -1704,18 +1719,28 @@ export async function queryChapters(startChapter, endChapter, query) {
 	isInternalGeneration = true;
 
 	try {
+		// Check if timeline has any chapters
+		if (!timelineData || timelineData.length === 0) {
+			const msg = 'No chapters exist in the timeline yet.';
+			errorToast(msg);
+			return msg;
+		}
+
 		// Validate chapter range
 		if (startChapter < 1 || startChapter > timelineData.length) {
-			errorToast(`Start chapter ${startChapter} is out of range (1-${timelineData.length})`);
-			return '';
+			const msg = `Start chapter ${startChapter} does not exist. Valid chapter range is 1-${timelineData.length}.`;
+			errorToast(msg);
+			return msg;
 		}
 		if (endChapter < 1 || endChapter > timelineData.length) {
-			errorToast(`End chapter ${endChapter} is out of range (1-${timelineData.length})`);
-			return '';
+			const msg = `End chapter ${endChapter} does not exist. Valid chapter range is 1-${timelineData.length}.`;
+			errorToast(msg);
+			return msg;
 		}
 		if (startChapter > endChapter) {
-			errorToast(`Start chapter ${startChapter} must be before or equal to end chapter ${endChapter}`);
-			return '';
+			const msg = `Invalid range: start chapter ${startChapter} must be before or equal to end chapter ${endChapter}.`;
+			errorToast(msg);
+			return msg;
 		}
 
 		debug(`Querying chapters ${startChapter} to ${endChapter}`);
@@ -1727,8 +1752,9 @@ export async function queryChapters(startChapter, endChapter, query) {
 		for (let i = startChapter; i <= endChapter; i++) {
 			const chapterHistory = await getChapterHistory(i);
 			if (!chapterHistory) {
-				errorToast(`Chapter ${i} not found`);
-				return '';
+				const msg = `Chapter ${i} not found.`;
+				errorToast(msg);
+				return msg;
 			}
 
 			const chapter = timelineData[i - 1];
