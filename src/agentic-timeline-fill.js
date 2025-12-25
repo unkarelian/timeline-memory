@@ -100,6 +100,7 @@ const agenticTimelineFillState = {
 const MAX_RETRIES = 5;
 const SWIPE_RETRY_DELAYS = [500, 1000, 2000, 3000];
 const TRIGGER_RETRY_DELAYS = [500, 1000, 2000, 3000];
+const INITIAL_TRIGGER_RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000]; // Longer delays for initial API readiness
 
 const AGENTIC_TIMELINE_FILL_METADATA_KEY = 'agentic_timeline_fill_session';
 
@@ -816,7 +817,7 @@ function stopGenerationMonitor() {
 }
 
 /**
- * Trigger the initial generation
+ * Trigger the initial generation with retry logic for slow API providers
  */
 async function triggerAgenticTimelineFill() {
     log('Triggering initial agentic timeline fill generation');
@@ -824,15 +825,37 @@ async function triggerAgenticTimelineFill() {
     // Start monitoring for generation completions
     startGenerationMonitor();
 
-    try {
-        // Trigger generation - SillyTavern will auto-continue after tool calls
-        await executeSlashCommandsWithOptions('/trigger');
-        log('Initial generation triggered');
-    } catch (err) {
-        error('Error triggering agentic timeline fill:', err);
-        stopGenerationMonitor();
-        // If initial trigger fails, clean up
-        await cleanupAgenticTimelineFillSession();
+    // Retry loop for initial trigger - some providers (like Deepseek) take time to become ready
+    for (let attempt = 0; attempt <= INITIAL_TRIGGER_RETRY_DELAYS.length; attempt++) {
+        // Check if session was aborted during retry
+        if (!agenticTimelineFillState.active || agenticTimelineFillState.endRequested) {
+            log('Session aborted during initial trigger retries');
+            stopGenerationMonitor();
+            return;
+        }
+
+        try {
+            // Trigger generation - SillyTavern will auto-continue after tool calls
+            await executeSlashCommandsWithOptions('/trigger');
+            log('Initial generation triggered successfully');
+            return; // Success - exit the retry loop
+        } catch (err) {
+            const isLastAttempt = attempt >= INITIAL_TRIGGER_RETRY_DELAYS.length;
+
+            if (isLastAttempt) {
+                error('Error triggering agentic timeline fill after all retries:', err);
+                toastr.error('Failed to start generation - API may not be ready', 'Timeline Memory');
+                stopGenerationMonitor();
+                await cleanupAgenticTimelineFillSession();
+                return;
+            }
+
+            const delay = INITIAL_TRIGGER_RETRY_DELAYS[attempt];
+            log(`Initial trigger attempt ${attempt + 1} failed: ${err.message}. Retrying in ${delay}ms...`);
+            toastr.info(`Waiting for API to become ready... (attempt ${attempt + 1}/${INITIAL_TRIGGER_RETRY_DELAYS.length + 1})`, 'Timeline Memory', { timeOut: delay });
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
 }
 

@@ -1038,6 +1038,10 @@ async function genSummaryWithSlash(history, id=0, { resummarizeChapterNumber = n
 			timelineContext = evaluateMacros('{{timeline}}', {});
 		}
 
+		if (typeof timelineContext !== 'string') {
+			timelineContext = JSON.stringify(timelineContext, null, 2);
+		}
+
 		const prompt_text = settings.memory_prompt_template.replace('{{content}}', history.trim());
 
 		// Replace {{timeline}} macro in prompt
@@ -1134,6 +1138,11 @@ async function generateMemory(message) {
 async function reasoningParser(str, profileId, { strict=true } = {}) {
     const profiles = extension_settings?.connectionManager?.profiles || [];
     const profile = profiles.find(p => p.id === profileId);
+
+    if (!profile) {
+        return { reasoning: '', content: str };
+    }
+
     const templateName = profile['reasoning-template'];
     console.log(templateName);
     const template = reasoning_templates.find(t => t.name === templateName);
@@ -1604,19 +1613,20 @@ export async function queryChapter(chapterNumber, query) {
 		debug(`Chapter history length: ${chapterHistory.length} messages`);
 
 		const timelineContext = evaluateMacros('{{timeline}}', {});
+		const timelineStr = typeof timelineContext === 'string' ? timelineContext : JSON.stringify(timelineContext, null, 2);
 
 		// Format the chapter history - this is ALL messages from the chapter
 		const chapterContext = chapterHistory.map((it) => `${it.name}: ${it.mes}`).join("\n\n");
 
 		debug(`Chapter context length: ${chapterContext.length} characters`);
-		debug(`Timeline context length: ${timelineContext.length} characters`);
+		debug(`Timeline context length: ${timelineStr.length} characters`);
 		debug(`Query: ${query}`);
 
 		// Build the prompt - for now, use simple string replacement to ensure it works
 		let prompt = settings.chapter_query_prompt_template;
 
 		// Replace macros in order - most specific first
-		prompt = prompt.replace(/{{timeline}}/gi, timelineContext);
+		prompt = prompt.replace(/{{timeline}}/gi, timelineStr);
 		prompt = prompt.replace(/{{chapter}}/gi, chapterContext);
 		// Also replace {{chapterSummary}} with the actual chapter summary
 		prompt = prompt.replace(/{{chapterSummary}}/gi, chapter.summary);
@@ -1631,7 +1641,7 @@ export async function queryChapter(chapterNumber, query) {
 		if (settings.chapter_query_system_prompt && settings.chapter_query_system_prompt.trim()) {
 			systemPrompt = settings.chapter_query_system_prompt;
 			// Replace the same macros in system prompt
-			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
+			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineStr);
 			systemPrompt = systemPrompt.replace(/{{chapter}}/gi, chapterContext);
 			// Also replace {{chapterSummary}} with the actual chapter summary
 			systemPrompt = systemPrompt.replace(/{{chapterSummary}}/gi, chapter.summary);
@@ -1767,6 +1777,7 @@ export async function queryChapters(startChapter, endChapter, query) {
 		}
 
 		const timelineContext = evaluateMacros('{{timeline}}', {});
+		const timelineStr = typeof timelineContext === 'string' ? timelineContext : JSON.stringify(timelineContext, null, 2);
 
 		// Format all chapters with headers
 		const allChaptersContext = chaptersData.map(chapterData => {
@@ -1778,14 +1789,14 @@ export async function queryChapters(startChapter, endChapter, query) {
 		const allSummariesContext = chapterSummaries.join("\n\n");
 
 		debug(`Total chapters context length: ${allChaptersContext.length} characters`);
-		debug(`Timeline context length: ${timelineContext.length} characters`);
+		debug(`Timeline context length: ${timelineStr.length} characters`);
 		debug(`Query: ${query}`);
 
 		// Build the prompt - use simple string replacement to ensure it works
 		let prompt = settings.chapter_query_prompt_template;
 
 		// Replace macros in order - most specific first
-		prompt = prompt.replace(/{{timeline}}/gi, timelineContext);
+		prompt = prompt.replace(/{{timeline}}/gi, timelineStr);
 		prompt = prompt.replace(/{{chapter}}/gi, allChaptersContext);
 		// Replace {{chapterSummary}} with all chapter summaries
 		prompt = prompt.replace(/{{chapterSummary}}/gi, allSummariesContext);
@@ -1800,7 +1811,7 @@ export async function queryChapters(startChapter, endChapter, query) {
 		if (settings.chapter_query_system_prompt && settings.chapter_query_system_prompt.trim()) {
 			systemPrompt = settings.chapter_query_system_prompt;
 			// Replace the same macros in system prompt
-			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineContext);
+			systemPrompt = systemPrompt.replace(/{{timeline}}/gi, timelineStr);
 			systemPrompt = systemPrompt.replace(/{{chapter}}/gi, allChaptersContext);
 			// Replace {{chapterSummary}} with all chapter summaries
 			systemPrompt = systemPrompt.replace(/{{chapterSummary}}/gi, allSummariesContext);

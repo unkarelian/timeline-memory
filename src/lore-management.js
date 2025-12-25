@@ -98,6 +98,7 @@ const loreManagementState = {
 const MAX_RETRIES = 5;  // Maximum number of consecutive retries before aborting
 const SWIPE_RETRY_DELAYS = [500, 1000, 2000, 3000];  // Delays between swipe attempts (ms)
 const TRIGGER_RETRY_DELAYS = [500, 1000, 2000, 3000];  // Delays between trigger attempts (ms)
+const INITIAL_TRIGGER_RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000];  // Longer delays for initial API readiness
 
 const LORE_MANAGEMENT_METADATA_KEY = 'lore_management_session';
 
@@ -906,7 +907,7 @@ function stopGenerationMonitor() {
 }
 
 /**
- * Trigger the initial lore management generation
+ * Trigger the initial lore management generation with retry logic for slow API providers
  * SillyTavern's tool calling flow handles subsequent generations automatically.
  * The generation monitor handles re-triggering if AI doesn't make a tool call.
  */
@@ -916,16 +917,38 @@ async function triggerLoreManagement() {
     // Start monitoring for generation completions
     startGenerationMonitor();
 
-    try {
-        // Trigger generation - SillyTavern will auto-continue after tool calls
-        // The end_lore_management tool (stealth) will handle cleanup when done
-        await executeSlashCommandsWithOptions('/trigger');
-        log('Initial generation triggered');
-    } catch (err) {
-        error('Error triggering lore management:', err);
-        stopGenerationMonitor();
-        // If initial trigger fails, clean up
-        await cleanupLoreManagementSession();
+    // Retry loop for initial trigger - some providers (like Deepseek) take time to become ready
+    for (let attempt = 0; attempt <= INITIAL_TRIGGER_RETRY_DELAYS.length; attempt++) {
+        // Check if session was aborted during retry
+        if (!loreManagementState.active || loreManagementState.endRequested) {
+            log('Session aborted during initial trigger retries');
+            stopGenerationMonitor();
+            return;
+        }
+
+        try {
+            // Trigger generation - SillyTavern will auto-continue after tool calls
+            // The end_lore_management tool (stealth) will handle cleanup when done
+            await executeSlashCommandsWithOptions('/trigger');
+            log('Initial generation triggered successfully');
+            return; // Success - exit the retry loop
+        } catch (err) {
+            const isLastAttempt = attempt >= INITIAL_TRIGGER_RETRY_DELAYS.length;
+
+            if (isLastAttempt) {
+                error('Error triggering lore management after all retries:', err);
+                toastr.error('Failed to start generation - API may not be ready', 'Timeline Memory');
+                stopGenerationMonitor();
+                await cleanupLoreManagementSession();
+                return;
+            }
+
+            const delay = INITIAL_TRIGGER_RETRY_DELAYS[attempt];
+            log(`Initial trigger attempt ${attempt + 1} failed: ${err.message}. Retrying in ${delay}ms...`);
+            toastr.info(`Waiting for API to become ready... (attempt ${attempt + 1}/${INITIAL_TRIGGER_RETRY_DELAYS.length + 1})`, 'Timeline Memory', { timeOut: delay });
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
 }
 
