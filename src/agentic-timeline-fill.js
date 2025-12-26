@@ -488,6 +488,42 @@ export function registerAgenticTimelineTools() {
         formatMessage: () => 'Ending information retrieval session...',
     });
 
+    // Tool: roll_dice
+    context.ToolManager.registerFunctionTool({
+        name: 'roll_dice',
+        displayName: 'Roll Dice',
+        description: 'Roll a die and get a random number between the specified minimum and maximum values (inclusive).',
+        stealth: false,
+        parameters: {
+            type: 'object',
+            properties: {
+                minimum: {
+                    type: 'integer',
+                    description: 'The minimum value (inclusive)'
+                },
+                maximum: {
+                    type: 'integer',
+                    description: 'The maximum value (inclusive)'
+                }
+            },
+            required: ['minimum', 'maximum']
+        },
+        action: async (args) => {
+            const min = Math.ceil(args.minimum);
+            const max = Math.floor(args.maximum);
+            if (min > max) {
+                return `Error: minimum (${args.minimum}) cannot be greater than maximum (${args.maximum})`;
+            }
+            const result = Math.floor(Math.random() * (max - min + 1)) + min;
+            log(`roll_dice: rolled ${result} (range: ${min}-${max})`);
+            // Reset retry count on successful tool call
+            agenticTimelineFillState.retryCount = 0;
+            return `Rolled: ${result}`;
+        },
+        shouldRegister: () => agenticTimelineFillState.active,
+        formatMessage: (args) => `Rolling dice (${args.minimum}-${args.maximum})...`,
+    });
+
     log('Agentic timeline fill tools registered');
 }
 
@@ -505,6 +541,7 @@ export function unregisterAgenticTimelineTools() {
         context.ToolManager.unregisterFunctionTool('query_timeline_chapters');
         context.ToolManager.unregisterFunctionTool('list_lorebook_entries');
         context.ToolManager.unregisterFunctionTool('end_information_retrieval');
+        context.ToolManager.unregisterFunctionTool('roll_dice');
         debug('Agentic timeline fill tools unregistered');
     } catch (err) {
         // Tools may not have been registered
