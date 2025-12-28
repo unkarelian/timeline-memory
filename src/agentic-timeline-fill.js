@@ -11,6 +11,7 @@ import { executeSlashCommandsWithOptions } from "../../../../slash-commands.js";
 import { settings } from "./settings.js";
 import { log, debug, error } from "./logging.js";
 import { createChatBackup } from "./backup.js";
+import { showLoadingScreen, hideLoadingScreen, setAbortCallback } from "./loading-screen.js";
 
 // Note: setCurrentChatContent and clearCurrentChatContent are imported dynamically
 // to avoid circular dependency issues with memories.js
@@ -604,6 +605,12 @@ export async function startAgenticTimelineFillSession() {
     agenticTimelineFillState.sessionChatId = context.getCurrentChatId?.() || null;
     agenticTimelineFillState.active = true;
 
+    // Show loading screen if enabled
+    if (settings.loading_screen_enabled) {
+        setAbortCallback(() => abortAgenticTimelineFillSession());
+        showLoadingScreen('agentic');
+    }
+
     // Capture current chat BEFORE hiding for {{currentChat}} macro
     try {
         const { setCurrentChatContent } = await import('./memories.js');
@@ -963,6 +970,9 @@ async function cleanupAgenticTimelineFillSession() {
         error('Error during cleanup:', err);
         toastr.error('Error cleaning up agentic timeline fill session', 'Timeline Memory');
     } finally {
+        // Hide loading screen if it was shown
+        hideLoadingScreen();
+
         // Clear state from metadata (safety net in case of errors)
         clearStateFromMetadata();
 

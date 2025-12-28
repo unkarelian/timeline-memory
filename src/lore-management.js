@@ -12,6 +12,7 @@ import { world_names, loadWorldInfo, createWorldInfoEntry, deleteWorldInfoEntry,
 import { settings } from "./settings.js";
 import { log, debug, error } from "./logging.js";
 import { createChatBackup } from "./backup.js";
+import { showLoadingScreen, hideLoadingScreen, setAbortCallback } from "./loading-screen.js";
 
 /**
  * Switch to a profile using SlashCommandParser directly
@@ -666,6 +667,12 @@ export async function startLoreManagementSession() {
     loreManagementState.sessionChatId = context.getCurrentChatId?.() || null;
     loreManagementState.active = true;
 
+    // Show loading screen if enabled
+    if (settings.loading_screen_enabled) {
+        setAbortCallback(() => abortLoreManagementSession());
+        showLoadingScreen('lore-management');
+    }
+
     // Clear timeline injection while lore management is active
     try {
         const { updateTimelineInjection } = await import('./memories.js');
@@ -1020,6 +1027,9 @@ async function cleanupLoreManagementSession() {
         error('Error during cleanup:', err);
         toastr.error('Error cleaning up lore management session', 'Timeline Memory');
     } finally {
+        // Hide loading screen if it was shown
+        hideLoadingScreen();
+
         // Clear state from metadata (safety net in case of errors)
         clearStateFromMetadata();
 

@@ -13,6 +13,7 @@ import { getPresetManager } from "../../../../../scripts/preset-manager.js";
 import { isLoreManagementActive } from "./lore-management.js";
 import { isAgenticTimelineFillActive } from "./agentic-timeline-fill.js";
 import { updateRetrievalProgress, isProgressVisible } from "./retrieval-progress.js";
+import { showLoadingScreen, hideLoadingScreen } from "./loading-screen.js";
 import { translate } from "../../../../../scripts/i18n.js";
 import { createChatBackup } from "./backup.js";
 
@@ -1346,6 +1347,11 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 	// Create a backup before any operations
 	await createChatBackup('timeline fill');
 
+	// Show loading screen if enabled (no abort callback for static timeline fill)
+	if (settings.loading_screen_enabled) {
+		showLoadingScreen('timeline-fill');
+	}
+
 	loadTimelineData();
 
 	const profileId = profileOverride || settings.timeline_fill_profile;
@@ -1573,6 +1579,8 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 		debug('Timeline fill failed:', error);
 		throw error;
 	} finally {
+		// Hide loading screen if it was shown
+		hideLoadingScreen();
 		// Always reset the flag when done
 		isInternalGeneration = false;
 	}

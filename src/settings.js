@@ -22,6 +22,7 @@ const defaultSettings = {
 	"is_enabled": true,
 	"tools_enabled": true,
 	"quick_reply_buttons_enabled": true,
+	"loading_screen_enabled": false,
 	"show_buttons": [Buttons.STOP],
 	// prompt/text injection settings
 	"memory_system_prompt": `<role>You are a literary analysis expert specializing in narrative structure and scene summarization. Your expertise is in distilling complex narrative elements into concise, query-friendly summaries.</role>
@@ -589,6 +590,7 @@ async function loadSettingsUI() {
 		const { updateQuickReplyButtonsVisibility } = await import('../index.js');
 		updateQuickReplyButtonsVisibility();
 	});
+	$("#rmr_loading_screen_enabled").prop('checked', settings.loading_screen_enabled).on('click', toggleCheckboxSetting);
 	// handle dropdowns
 	reloadProfiles();
 	$('#rmr_profile').on('input', () => {
@@ -1947,6 +1949,7 @@ function refreshSettingsUI() {
 	// Checkboxes
 	$('#rmr_tools_enabled').prop('checked', settings.tools_enabled);
 	$('#rmr_quick_reply_buttons_enabled').prop('checked', settings.quick_reply_buttons_enabled);
+	$('#rmr_loading_screen_enabled').prop('checked', settings.loading_screen_enabled);
 	$('#rmr_hide_chapter').prop('checked', settings.hide_chapter);
 	$('#rmr_add_chunk_summaries').prop('checked', settings.add_chunk_summaries);
 
