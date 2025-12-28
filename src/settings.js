@@ -21,6 +21,7 @@ const defaultSettings = {
 	// general settings
 	"is_enabled": true,
 	"tools_enabled": true,
+	"quick_reply_buttons_enabled": true,
 	"show_buttons": [Buttons.STOP],
 	// prompt/text injection settings
 	"memory_system_prompt": `<role>You are a literary analysis expert specializing in narrative structure and scene summarization. Your expertise is in distilling complex narrative elements into concise, query-friendly summaries.</role>
@@ -304,6 +305,35 @@ NOTE: This is strictly for reference to past events. NEVER use an ID mentioned h
 	"agentic_timeline_fill_profile": null,
 	"agentic_timeline_fill_prompt": "begin timeline retrieval",
 
+	// Auto-summarize settings
+	"auto_summarize_enabled": false,
+	"auto_summarize_threshold": 50,  // N: messages before trigger
+	"auto_summarize_buffer": 10,     // X: buffer of recent messages to exclude
+	"auto_summarize_profile": null,  // separate profile for endpoint selection
+	"auto_summarize_system_prompt": `# Role
+You are Auto Summarize Endpoint Selector. Your task is to identify the single best chapter endpoint in the provided message range.
+
+## Task
+Select the message ID that represents the longest self-contained narrative arc within the given range. The endpoint should be at a natural narrative beat: resolution, decision, scene change, or clear transition.
+
+## Output Format
+Return ONLY a JSON object with a single field:
+{ "chapterEnd": <integer message ID> }
+
+## Rules
+- Select exactly ONE endpoint
+- The endpoint must be within the provided message range
+- Choose the point that creates the most complete, self-contained chapter
+- Prefer later messages that still complete the arc (avoid cutting mid-beat)`,
+	"auto_summarize_prompt_template": `# Message Range for Auto-Summarize
+First valid message ID: {{firstValidId}}
+Last valid message ID: {{lastValidId}}
+
+# Messages in Range:
+{{messagesInRange}}
+
+Select the single best chapter endpoint from this range.`,
+
 	// Inject at depth settings
 	"inject_enabled": false,
 	"inject_depth": 0,
@@ -393,6 +423,10 @@ function reloadProfiles() {
     if (agenticTimelineFillSelect?.length) {
         agenticTimelineFillSelect.not(':first').remove();
     }
+    const autoSummarizeSelect = $('#rmr_auto_summarize_profile');
+    if (autoSummarizeSelect?.length) {
+        autoSummarizeSelect.not(':first').remove();
+    }
     if (!extension_settings.connectionManager?.profiles) {
         if (timelineFillSelect?.length) {
             timelineFillSelect.val('');
@@ -405,6 +439,9 @@ function reloadProfiles() {
         }
         if (agenticTimelineFillSelect?.length) {
             agenticTimelineFillSelect.val('');
+        }
+        if (autoSummarizeSelect?.length) {
+            autoSummarizeSelect.val('');
         }
         return;
     }
@@ -453,6 +490,16 @@ function reloadProfiles() {
             );
             if (settings.agentic_timeline_fill_profile == profile.id) {
                 agenticTimelineFillSelect.val(profile.id);
+            }
+        }
+        if (autoSummarizeSelect?.length) {
+            autoSummarizeSelect.append(
+                $('<option></option>')
+                    .attr('value', profile.id)
+                    .text(profile.name)
+            );
+            if (settings.auto_summarize_profile == profile.id) {
+                autoSummarizeSelect.val(profile.id);
             }
         }
     }
@@ -535,6 +582,12 @@ async function loadSettingsUI() {
 		// Update tool registration when toggle changes
 		const { updateToolRegistration } = await import('./commands.js');
 		updateToolRegistration();
+	});
+	$("#rmr_quick_reply_buttons_enabled").prop('checked', settings.quick_reply_buttons_enabled).on('click', async (e) => {
+		toggleCheckboxSetting(e);
+		// Update button visibility when toggle changes
+		const { updateQuickReplyButtonsVisibility } = await import('../index.js');
+		updateQuickReplyButtonsVisibility();
 	});
 	// handle dropdowns
 	reloadProfiles();
@@ -751,6 +804,32 @@ async function loadSettingsUI() {
         } catch (err) {
             console.error('Agentic Timeline Fill error:', err);
             toastr.error('Failed to start Agentic Timeline Fill', 'Timeline Memory');
+        }
+    });
+
+    // Auto-summarize settings
+    $('#rmr_auto_summarize_enabled').prop('checked', settings.auto_summarize_enabled).on('click', toggleCheckboxSetting);
+    $('#rmr_auto_summarize_system_prompt').attr('placeholder', defaultSettings.auto_summarize_system_prompt || 'System-level instructions for endpoint selection (optional)');
+    $('#rmr_auto_summarize_prompt_template').attr('placeholder', defaultSettings.auto_summarize_prompt_template);
+
+    // Auto-summarize profile dropdown
+    const autoSummarizeProfileSelect = $('#rmr_auto_summarize_profile');
+    autoSummarizeProfileSelect.on('input', () => {
+        const profile = autoSummarizeProfileSelect.val();
+        if (!profile.length) {
+            settings.auto_summarize_profile = null;
+            getContext().saveSettingsDebounced();
+            return;
+        }
+        const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
+        if (profileID >= 0) {
+            settings.auto_summarize_profile = profile;
+            getContext().saveSettingsDebounced();
+        } else {
+            toastr.error("Non-existent profile selected.", "Timeline Memory");
+            autoSummarizeProfileSelect.val('');
+            settings.auto_summarize_profile = null;
+            getContext().saveSettingsDebounced();
         }
     });
 
@@ -1867,6 +1946,7 @@ async function handleMasterImport() {
 function refreshSettingsUI() {
 	// Checkboxes
 	$('#rmr_tools_enabled').prop('checked', settings.tools_enabled);
+	$('#rmr_quick_reply_buttons_enabled').prop('checked', settings.quick_reply_buttons_enabled);
 	$('#rmr_hide_chapter').prop('checked', settings.hide_chapter);
 	$('#rmr_add_chunk_summaries').prop('checked', settings.add_chunk_summaries);
 

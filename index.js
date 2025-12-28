@@ -3,7 +3,7 @@ import { getContext } from "../../../extensions.js";
 import { loadSlashCommands, updateToolRegistration } from "./src/commands.js";
 import { addMessageButtons, resetMessageButtons } from "./src/messages.js";
 import { loadSettings, changeCharaName, renderSummariesList, settings } from "./src/settings.js";
-import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection, resetArcSessionState } from "./src/memories.js";
+import { initTimelineMacro, loadTimelineData, resetTimelineFillResults, updateTimelineInjection, resetArcSessionState, checkAutoSummarize } from "./src/memories.js";
 import { showRetrievalProgress, hideRetrievalProgress } from "./src/retrieval-progress.js";
 import { loadUITranslations } from "./src/locales.js";
 
@@ -30,6 +30,15 @@ function checkVersion(version_string) {
 	let ver = version_string.pkgVersion.split('.').map(x=>Number(x));
 	if (ver[1] < 13) return false;
 	else return true;
+}
+
+export function updateQuickReplyButtonsVisibility() {
+	const buttons = $('.rmr-quick-reply-btn');
+	if (settings.quick_reply_buttons_enabled) {
+		buttons.show();
+	} else {
+		buttons.hide();
+	}
 }
 
 function initQuickReplyButtons() {
@@ -147,6 +156,18 @@ function initQuickReplyButtons() {
 			retrieveAndSwipeBtn.removeClass('disabled');
 		}
 	});
+
+	// Keyboard shortcut: Shift+Enter to trigger Retrieve and Send
+	$('#send_textarea').on('keydown', (e) => {
+		if (e.shiftKey && e.key === 'Enter' && settings.quick_reply_buttons_enabled) {
+			e.preventDefault();
+			e.stopPropagation();
+			retrieveAndSendBtn.trigger('click');
+		}
+	});
+
+	// Apply initial visibility based on setting
+	updateQuickReplyButtonsVisibility();
 }
 
 jQuery(() => {
@@ -169,7 +190,11 @@ jQuery(() => {
 		initQuickReplyButtons();
 	});
 	eventSource.on(event_types.USER_MESSAGE_RENDERED, (mesId) => onMessageRendered(mesId));
-	eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (mesId) => onMessageRendered(mesId));
+	eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, async (mesId) => {
+		onMessageRendered(mesId);
+		// Check if auto-summarize should trigger
+		await checkAutoSummarize();
+	});
 	eventSource.on(event_types.CHAT_CHANGED, async (chatId) => {
 		if (!chatId) return;
 

@@ -16,6 +16,10 @@
 					<input id="rmr_tools_enabled" class="checkbox" type="checkbox" />
 					<span data-i18n="rmr_enable_tools">Enable Tool/Function Calls for Chapter Queries</span>
 				</label>
+				<label class="checkbox_label" for="rmr_quick_reply_buttons_enabled">
+					<input id="rmr_quick_reply_buttons_enabled" class="checkbox" type="checkbox" />
+					<span data-i18n="rmr_enable_quick_reply_buttons">Show Quick Reply Buttons (Retrieve and Send/Swipe)</span>
+				</label>
 			</div>
 			<div class="rmr-extension_block">
 				<div class="master-export-import">
@@ -84,6 +88,54 @@
 						<small data-i18n="rmr_agentic_timeline_fill_prompt_label">Agentic Timeline Fill Prompt</small>
 					</label>
 					<textarea data-i18n="[placeholder]rmr_agentic_timeline_fill_placeholder" placeholder="begin timeline retrieval" rows="2" class="margin0 text_pole textarea_compact" id="rmr_agentic_timeline_fill_prompt"></textarea>
+				</div>
+			</div>
+			<hr>
+			<h4 data-i18n="rmr_auto_summarize">Auto-Summarize</h4>
+			<div class="rmr-extension_block">
+				<label class="checkbox_label" for="rmr_auto_summarize_enabled">
+					<input id="rmr_auto_summarize_enabled" class="checkbox" type="checkbox" />
+					<span data-i18n="rmr_enable_auto_summarize">Enable Auto-Summarize</span>
+				</label>
+			</div>
+			<div class="rmr-extension_block">
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_auto_summarize_profile">
+							<small data-i18n="rmr_auto_summarize_profile">Auto-Summarize Profile</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_auto_summarize_profile">
+							<option value="" data-i18n="rmr_select_profile">-- Select Profile --</option>
+						</select>
+					</div>
+				</div>
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn" title="Number of messages that must accumulate before auto-summarize triggers (N)">
+						<label for="rmr_auto_summarize_threshold">
+							<small data-i18n="rmr_auto_summarize_threshold">Threshold (N)</small>
+						</label>
+						<input class="text_pole widthNatural" id="rmr_auto_summarize_threshold" type="number" min="10" value="50" />
+					</div>
+					<div class="flex-container flex1 flexFlowColumn" title="Number of recent messages to exclude from endpoint selection (X)">
+						<label for="rmr_auto_summarize_buffer">
+							<small data-i18n="rmr_auto_summarize_buffer">Buffer (X)</small>
+						</label>
+						<input class="text_pole widthNatural" id="rmr_auto_summarize_buffer" type="number" min="1" value="10" />
+					</div>
+				</div>
+				<div class="rmr-extension_block flex-container flexFlowColumn">
+					<div title="System prompt for auto-summarize endpoint selection." class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_auto_summarize_system_prompt">
+							<small data-i18n="rmr_auto_summarize_system">Auto-Summarize System Prompt</small>
+						</label>
+						<textarea data-i18n="[placeholder]rmr_auto_summarize_system_placeholder" placeholder="System-level instructions for endpoint selection (optional)" rows="2" class="margin0 text_pole textarea_compact" id="rmr_auto_summarize_system_prompt"></textarea>
+					</div>
+					<div title="The prompt used to select the chapter endpoint. Supports {{firstValidId}}, {{lastValidId}}, {{messagesInRange}}." class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_auto_summarize_prompt_template">
+							<small data-i18n="rmr_auto_summarize_user">Auto-Summarize User Prompt</small>
+						</label>
+						<textarea placeholder="" rows="6" class="margin0 text_pole textarea_compact" id="rmr_auto_summarize_prompt_template"></textarea>
+					</div>
 				</div>
 			</div>
 			<hr>

@@ -197,6 +197,9 @@ let currentChatContent = null; // Captured chat content for {{currentChat}} macr
 // This is used to prevent timeline injection during these operations
 let isInternalGeneration = false;
 
+// Flag to track when auto-summarize is running
+let isAutoSummarizing = false;
+
 // Session-level storage for arc analyzer state (persists until page refresh or chat change)
 let arcSessionState = {
     chatId: null,           // To detect chat changes
@@ -2752,5 +2755,199 @@ export async function analyzeArcs(profileOverride = null, forceReanalyze = false
     } finally {
         // Always reset the flag when done
         isInternalGeneration = false;
+    }
+}
+
+// ============================================================================
+// AUTO-SUMMARIZE FUNCTIONS
+// ============================================================================
+
+/**
+ * Get the last chapter end message ID from timeline data
+ * @returns {number} The last chapter end message ID, or 0 if no chapters exist
+ */
+function getLastChapterEndId() {
+    const timeline = getTimelineData();
+    if (!timeline || timeline.length === 0) return 0;
+    return timeline[timeline.length - 1].endMsgId;
+}
+
+/**
+ * Check if auto-summarize should trigger and run it if conditions are met.
+ * Called after each CHARACTER_MESSAGE_RENDERED event.
+ */
+export async function checkAutoSummarize() {
+    // Skip if disabled
+    if (!settings.auto_summarize_enabled) return;
+
+    // Skip if already running
+    if (isAutoSummarizing) return;
+
+    // Skip if internal generation is happening (e.g., arc analyzer, queries)
+    if (isInternalGeneration) return;
+
+    // Skip if lore management or agentic timeline fill is active
+    if (isLoreManagementActive()) return;
+    if (isAgenticTimelineFillActive()) return;
+
+    const context = getContext();
+    const chat = context.chat;
+
+    // Skip if no chat
+    if (!chat || chat.length === 0) return;
+
+    const currentMsgId = chat.length - 1;
+
+    // Find last chapter end
+    const lastChapterEnd = getLastChapterEndId();
+    const messagesSinceChapter = currentMsgId - lastChapterEnd;
+
+    const N = settings.auto_summarize_threshold || 50;
+    const X = settings.auto_summarize_buffer || 10;
+
+    debug(`Auto-summarize check: messagesSinceChapter=${messagesSinceChapter}, threshold=${N}, buffer=${X}, needed=${N + X}`);
+
+    // Check if threshold is reached
+    if (messagesSinceChapter >= N + X) {
+        await performAutoSummarize(lastChapterEnd, currentMsgId, N, X);
+    }
+}
+
+/**
+ * Perform auto-summarization: select endpoint and summarize
+ * @param {number} lastChapterEnd - The last chapter end message ID
+ * @param {number} currentMsgId - The current message ID
+ * @param {number} N - Threshold setting
+ * @param {number} X - Buffer setting
+ */
+async function performAutoSummarize(lastChapterEnd, currentMsgId, N, X) {
+    isAutoSummarizing = true;
+    isInternalGeneration = true;
+
+    try {
+        // Range: from lastChapterEnd+1 to currentMsgId - X
+        const rangeStart = lastChapterEnd + 1;
+        const rangeEnd = currentMsgId - X;
+
+        if (rangeEnd <= rangeStart) {
+            debug('Auto-summarize: Not enough messages in valid range');
+            return;
+        }
+
+        infoToast('Auto-summarizing chapter...');
+
+        // Get endpoint from AI
+        const selectedEndpoint = await selectAutoSummarizeEndpoint(rangeStart, rangeEnd);
+
+        if (selectedEndpoint === null) {
+            // Error already shown
+            return;
+        }
+
+        if (selectedEndpoint < rangeStart || selectedEndpoint > rangeEnd) {
+            console.error('Auto-summarize: Invalid endpoint selected:', selectedEndpoint, 'valid range:', rangeStart, '-', rangeEnd);
+            errorToast('Auto-summarize failed: AI selected invalid endpoint');
+            return;
+        }
+
+        debug(`Auto-summarize: Selected endpoint ${selectedEndpoint} (range: ${rangeStart}-${rangeEnd})`);
+
+        // Summarize at selected endpoint
+        await summarizeChapter(selectedEndpoint, { quiet: true });
+
+        doneToast('Auto-summarize complete!');
+    } catch (err) {
+        console.error('Auto-summarize failed:', err);
+        errorToast('Auto-summarize failed: ' + err.message);
+    } finally {
+        isAutoSummarizing = false;
+        isInternalGeneration = false;
+    }
+}
+
+/**
+ * Call AI to select the best chapter endpoint within the given message range
+ * @param {number} rangeStart - First valid message ID
+ * @param {number} rangeEnd - Last valid message ID
+ * @returns {number|null} The selected endpoint message ID, or null on error
+ */
+async function selectAutoSummarizeEndpoint(rangeStart, rangeEnd) {
+    const profileId = settings.auto_summarize_profile;
+    if (!profileId) {
+        errorToast('Select an Auto-Summarize profile first');
+        return null;
+    }
+
+    const context = getContext();
+    const chat = context.chat;
+
+    // Build messages in range (similar to chapterHistory format)
+    const messagesInRange = [];
+    for (let i = rangeStart; i <= rangeEnd; i++) {
+        const mes = chat[i];
+        if (!mes || mes.is_system) continue;
+        messagesInRange.push({
+            id: i,
+            name: mes.name || (mes.is_user ? context.name1 : context.name2),
+            role: mes.is_user ? 'user' : 'assistant',
+            text: mes.mes
+        });
+    }
+
+    if (messagesInRange.length === 0) {
+        errorToast('No valid messages in auto-summarize range');
+        return null;
+    }
+
+    // Build prompt
+    let prompt = settings.auto_summarize_prompt_template || '';
+    prompt = prompt.replace(/{{firstValidId}}/gi, String(rangeStart));
+    prompt = prompt.replace(/{{lastValidId}}/gi, String(rangeEnd));
+    prompt = prompt.replace(/{{messagesInRange}}/gi, JSON.stringify(messagesInRange, null, 2));
+    prompt = context.substituteParams(prompt, context.name1, context.name2);
+
+    let systemPrompt = settings.auto_summarize_system_prompt || '';
+    systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
+
+    const messages = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    messages.push({ role: 'user', content: prompt });
+
+    const maxTokens = await getMaxTokensForProfile(profileId);
+    const overridePayload = buildOverridePayload(profileId, maxTokens);
+    const reasoningEffort = getReasoningEffort(profileId);
+    if (reasoningEffort !== undefined) overridePayload.reasoning_effort = reasoningEffort;
+    const includeReasoning = getIncludeReasoning(profileId);
+    if (includeReasoning !== undefined) overridePayload.include_reasoning = includeReasoning;
+
+    debug('Auto-summarize: Sending request to select endpoint...');
+
+    const result = await ConnectionManagerRequestService.sendRequest(
+        profileId,
+        messages,
+        maxTokens,
+        { includePreset: true, includeInstruct: true, stream: false },
+        overridePayload,
+    );
+
+    const content = result?.content || result || '';
+    const parsed = await reasoningParser(content, profileId);
+    const finalContent = parsed ? parsed.content : content;
+
+    debug('Auto-summarize: AI response:', finalContent);
+
+    // Parse JSON response
+    const unfenced = stripJsonFences(finalContent);
+    try {
+        const obj = JSON.parse(unfenced);
+        const endpoint = obj.chapterEnd;
+        if (typeof endpoint !== 'number' || !Number.isInteger(endpoint)) {
+            throw new Error('chapterEnd is not an integer');
+        }
+        return endpoint;
+    } catch (e) {
+        console.error('Failed to parse auto-summarize response:', e, finalContent);
+        errorToast('Failed to parse AI response for endpoint selection');
+        return null;
     }
 }
