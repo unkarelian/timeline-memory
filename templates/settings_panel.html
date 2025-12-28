@@ -16,10 +16,17 @@
 					<input id="rmr_tools_enabled" class="checkbox" type="checkbox" />
 					<span data-i18n="rmr_enable_tools">Enable Tool/Function Calls for Chapter Queries</span>
 				</label>
-				<label class="checkbox_label" for="rmr_quick_reply_buttons_enabled">
-					<input id="rmr_quick_reply_buttons_enabled" class="checkbox" type="checkbox" />
-					<span data-i18n="rmr_enable_quick_reply_buttons">Show Quick Reply Buttons (Retrieve and Send/Swipe)</span>
-				</label>
+				<div class="flex-container marginTopBot5">
+					<div class="flex-container flex1 flexFlowColumn">
+						<label for="rmr_quick_reply_buttons_location">
+							<small data-i18n="rmr_quick_reply_buttons_location">Quick Reply Buttons Location</small>
+						</label>
+						<select class="text_pole widthNatural" id="rmr_quick_reply_buttons_location">
+							<option value="send_form" data-i18n="rmr_location_send_form">Send Form</option>
+							<option value="extensions_menu" data-i18n="rmr_location_extensions_menu">Extensions Menu</option>
+						</select>
+					</div>
+				</div>
 				<label class="checkbox_label" for="rmr_loading_screen_enabled">
 					<input id="rmr_loading_screen_enabled" class="checkbox" type="checkbox" />
 					<span data-i18n="rmr_enable_loading_screen">Show Loading Screen During Sessions</span>

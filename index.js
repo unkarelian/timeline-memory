@@ -32,12 +32,43 @@ function checkVersion(version_string) {
 	else return true;
 }
 
-export function updateQuickReplyButtonsVisibility() {
+export function updateQuickReplyButtonsLocation() {
 	const buttons = $('.rmr-quick-reply-btn');
-	if (settings.quick_reply_buttons_enabled) {
-		buttons.show();
+	const icons = $('.rmr-btn-icon');
+	const extensionsMenu = $('#extensionsMenu');
+	const rightSendForm = $('#rightSendForm');
+	const sendButton = rightSendForm.find('#send_but');
+
+	// Ensure our container exists in extensions menu
+	let extContainer = $('#rmr_timeline_wand_container');
+	if (!extContainer.length && extensionsMenu.length) {
+		extContainer = $('<div id="rmr_timeline_wand_container" class="extension_container"></div>');
+		extensionsMenu.append(extContainer);
+	}
+
+	if (settings.quick_reply_buttons_location === 'extensions_menu') {
+		// Add standard SillyTavern extension menu classes
+		buttons.addClass('list-group-item flex-container flexGap5');
+		icons.addClass('extensionsMenuExtensionButton');
+		// Move buttons to extensions menu
+		if (extContainer.length) {
+			buttons.detach().appendTo(extContainer);
+			extContainer.show();
+		}
 	} else {
-		buttons.hide();
+		// Remove extension menu classes for send form
+		buttons.removeClass('list-group-item flex-container flexGap5');
+		icons.removeClass('extensionsMenuExtensionButton');
+		// Move buttons back to send form (default)
+		if (sendButton.length) {
+			const retrieveAndSwipeBtn = $('#rmr-retrieve-swipe').detach();
+			const retrieveAndSendBtn = $('#rmr-retrieve-send').detach();
+			retrieveAndSwipeBtn.insertBefore(sendButton);
+			retrieveAndSendBtn.insertBefore(retrieveAndSwipeBtn);
+		}
+		if (extContainer.length) {
+			extContainer.hide();
+		}
 	}
 }
 
@@ -51,24 +82,28 @@ function initQuickReplyButtons() {
 	// Retrieve and Send button
 	const retrieveAndSendBtn = $(`
 		<div id="rmr-retrieve-send"
-			class="fa-solid fa-comment-dots rmr-quick-reply-btn interactable"
+			class="rmr-quick-reply-btn interactable"
 			title="Retrieve and Send - Send message with timeline context"
 			data-i18n="[title]Retrieve and Send - Send message with timeline context"
 			tabindex="0"
 			role="button"
 			aria-label="Retrieve and Send">
+			<div class="fa-solid fa-comment-dots rmr-btn-icon"></div>
+			<span class="rmr-btn-text" data-i18n="rmr_retrieve_send">Retrieve and Send</span>
 		</div>
 	`);
 
 	// Retrieve and Swipe button
 	const retrieveAndSwipeBtn = $(`
 		<div id="rmr-retrieve-swipe"
-			class="fa-solid fa-rotate rmr-quick-reply-btn interactable"
+			class="rmr-quick-reply-btn interactable"
 			title="Retrieve and Swipe - Refresh with timeline context"
 			data-i18n="[title]Retrieve and Swipe - Refresh with timeline context"
 			tabindex="0"
 			role="button"
 			aria-label="Retrieve and Swipe">
+			<div class="fa-solid fa-rotate rmr-btn-icon"></div>
+			<span class="rmr-btn-text" data-i18n="rmr_retrieve_swipe">Retrieve and Swipe</span>
 		</div>
 	`);
 
@@ -88,7 +123,8 @@ function initQuickReplyButtons() {
 		if (retrieveAndSendBtn.hasClass('disabled')) return;
 		retrieveAndSendBtn.addClass('disabled');
 		// Change icon to spinning gear
-		retrieveAndSendBtn.removeClass('fa-comment-dots').addClass('fa-gear fa-spin');
+		const sendIcon = retrieveAndSendBtn.find('.rmr-btn-icon');
+		sendIcon.removeClass('fa-comment-dots').addClass('fa-gear fa-spin');
 		// Only show progress UI for non-agentic mode
 		const showProgress = !settings.agentic_timeline_fill_enabled;
 		if (showProgress) showRetrievalProgress('analysis');
@@ -100,7 +136,7 @@ function initQuickReplyButtons() {
 		} finally {
 			if (showProgress) hideRetrievalProgress();
 			// Restore original icon
-			retrieveAndSendBtn.removeClass('fa-gear fa-spin').addClass('fa-comment-dots');
+			sendIcon.removeClass('fa-gear fa-spin').addClass('fa-comment-dots');
 			retrieveAndSendBtn.removeClass('disabled');
 		}
 	});
@@ -110,7 +146,8 @@ function initQuickReplyButtons() {
 		if (retrieveAndSwipeBtn.hasClass('disabled')) return;
 		retrieveAndSwipeBtn.addClass('disabled');
 		// Change icon to spinning gear
-		retrieveAndSwipeBtn.removeClass('fa-rotate').addClass('fa-gear fa-spin');
+		const swipeIcon = retrieveAndSwipeBtn.find('.rmr-btn-icon');
+		swipeIcon.removeClass('fa-rotate').addClass('fa-gear fa-spin');
 		// Only show progress UI for non-agentic mode
 		const showProgress = !settings.agentic_timeline_fill_enabled;
 		if (showProgress) showRetrievalProgress('analysis');
@@ -152,22 +189,22 @@ function initQuickReplyButtons() {
 		} finally {
 			if (showProgress) hideRetrievalProgress();
 			// Restore original icon
-			retrieveAndSwipeBtn.removeClass('fa-gear fa-spin').addClass('fa-rotate');
+			swipeIcon.removeClass('fa-gear fa-spin').addClass('fa-rotate');
 			retrieveAndSwipeBtn.removeClass('disabled');
 		}
 	});
 
 	// Keyboard shortcut: Shift+Enter to trigger Retrieve and Send
 	$('#send_textarea').on('keydown', (e) => {
-		if (e.shiftKey && e.key === 'Enter' && settings.quick_reply_buttons_enabled) {
+		if (e.shiftKey && e.key === 'Enter') {
 			e.preventDefault();
 			e.stopPropagation();
 			retrieveAndSendBtn.trigger('click');
 		}
 	});
 
-	// Apply initial visibility based on setting
-	updateQuickReplyButtonsVisibility();
+	// Apply initial location based on setting
+	updateQuickReplyButtonsLocation();
 }
 
 jQuery(() => {

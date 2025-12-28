@@ -316,7 +316,7 @@
   padding-top: env(safe-area-inset-top, 0);
 }
 
-/* Quick Reply Buttons in Send Form */
+/* Quick Reply Buttons - Base Styles */
 .rmr-quick-reply-btn {
   cursor: pointer;
   opacity: 0.7;
@@ -334,6 +334,20 @@
   pointer-events: none;
 }
 
+/* Hide text labels when in send form */
+#rightSendForm .rmr-quick-reply-btn .rmr-btn-text {
+  display: none;
+}
+
+/* Extensions Menu - use standard ST styling, just ensure text is visible */
+#rmr_timeline_wand_container .rmr-quick-reply-btn {
+  opacity: 1;
+}
+
+#rmr_timeline_wand_container .rmr-quick-reply-btn .rmr-btn-text {
+  display: inline;
+}
+
 /* ===============================================
    Retrieval Progress Notification Styles
    =============================================== */
@@ -342,7 +356,7 @@
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 10000;
+  z-index: 10002; /* Above loading screen (10001) */
   opacity: 0;
   transform: translateY(20px);
   transition: opacity 0.3s ease, transform 0.3s ease;
@@ -830,6 +844,13 @@
   .rmr-loading-screen-content {
     padding: 30px 20px;
     width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .rmr-loading-screen-header {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .rmr-loading-icon {
@@ -837,7 +858,7 @@
   }
 
   .rmr-loading-mode-text {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .rmr-loading-quote {
@@ -846,5 +867,69 @@
 
   .rmr-loading-quote-container {
     min-height: 60px;
+    padding: 0 10px;
+  }
+
+  .rmr-loading-abort-btn {
+    padding: 14px 28px;
+    font-size: 16px;
+    min-height: 48px; /* Touch-friendly tap target */
+  }
+}
+
+/* Small mobile screens */
+@media (max-width: 400px) {
+  .rmr-loading-screen-content {
+    padding: 20px 15px;
+    width: 95%;
+    border-radius: 12px;
+  }
+
+  .rmr-loading-screen-header {
+    margin-bottom: 20px;
+  }
+
+  .rmr-loading-icon {
+    font-size: 24px;
+  }
+
+  .rmr-loading-mode-text {
+    font-size: 16px;
+  }
+
+  .rmr-loading-quote {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .rmr-loading-quote-container {
+    min-height: 50px;
+  }
+
+  .rmr-loading-abort-btn {
+    margin-top: 20px;
+    padding: 12px 24px;
+    width: 100%;
+  }
+}
+
+/* Landscape orientation on mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  .rmr-loading-screen-content {
+    padding: 15px 20px;
+    max-height: 85vh;
+  }
+
+  .rmr-loading-screen-header {
+    margin-bottom: 15px;
+  }
+
+  .rmr-loading-quote-container {
+    min-height: 40px;
+  }
+
+  .rmr-loading-abort-btn {
+    margin-top: 15px;
+    padding: 10px 20px;
   }
 }

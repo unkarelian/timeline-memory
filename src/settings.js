@@ -21,7 +21,7 @@ const defaultSettings = {
 	// general settings
 	"is_enabled": true,
 	"tools_enabled": true,
-	"quick_reply_buttons_enabled": true,
+	"quick_reply_buttons_location": "send_form", // "send_form" or "extensions_menu"
 	"loading_screen_enabled": false,
 	"show_buttons": [Buttons.STOP],
 	// prompt/text injection settings
@@ -584,11 +584,12 @@ async function loadSettingsUI() {
 		const { updateToolRegistration } = await import('./commands.js');
 		updateToolRegistration();
 	});
-	$("#rmr_quick_reply_buttons_enabled").prop('checked', settings.quick_reply_buttons_enabled).on('click', async (e) => {
-		toggleCheckboxSetting(e);
-		// Update button visibility when toggle changes
-		const { updateQuickReplyButtonsVisibility } = await import('../index.js');
-		updateQuickReplyButtonsVisibility();
+	$('#rmr_quick_reply_buttons_location').val(settings.quick_reply_buttons_location || 'send_form').on('input', async () => {
+		settings.quick_reply_buttons_location = $('#rmr_quick_reply_buttons_location').val();
+		getContext().saveSettingsDebounced();
+		// Update button location when setting changes
+		const { updateQuickReplyButtonsLocation } = await import('../index.js');
+		updateQuickReplyButtonsLocation();
 	});
 	$("#rmr_loading_screen_enabled").prop('checked', settings.loading_screen_enabled).on('click', toggleCheckboxSetting);
 	// handle dropdowns
@@ -1287,6 +1288,13 @@ ${settings.keywords_prompt}`;
 		delete settings.scene_query_prompt_template;
 	}
 
+	// Migrate old quick_reply_buttons_enabled boolean to quick_reply_buttons_location string
+	if (settings.quick_reply_buttons_enabled !== undefined) {
+		// If it was disabled, we don't have a "disabled" option anymore, default to send_form
+		settings.quick_reply_buttons_location = 'send_form';
+		delete settings.quick_reply_buttons_enabled;
+	}
+
 	// load default values into settings
 	for (const key in defaultSettings) {
 		if (settings[key] === undefined) {
@@ -1948,8 +1956,9 @@ async function handleMasterImport() {
 function refreshSettingsUI() {
 	// Checkboxes
 	$('#rmr_tools_enabled').prop('checked', settings.tools_enabled);
-	$('#rmr_quick_reply_buttons_enabled').prop('checked', settings.quick_reply_buttons_enabled);
 	$('#rmr_loading_screen_enabled').prop('checked', settings.loading_screen_enabled);
+	// Dropdowns
+	$('#rmr_quick_reply_buttons_location').val(settings.quick_reply_buttons_location || 'send_form');
 	$('#rmr_hide_chapter').prop('checked', settings.hide_chapter);
 	$('#rmr_add_chunk_summaries').prop('checked', settings.add_chunk_summaries);
 
