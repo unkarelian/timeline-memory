@@ -1,33 +1,42 @@
 # Loading Screen Assets
 
-Place your custom assets here for the loading screen feature.
+Add your own music and backgrounds here to customize the loading screen experience.
+
+**Note:** Assets are not included by default. You can add your own!
 
 ## How to Add Assets
 
-1. Place your files in the appropriate folder:
-   - `music/` - for ambient music files (.mp3, .ogg, .wav)
-   - `backgrounds/` - for background images (.png, .jpg, .jpeg, .gif, .webp)
+Simply drop numbered files into the folders:
 
-2. **Edit `src/loading-screen.js`** to add your files as pairs in the `assetPairs` array:
+```
+backgrounds/
+  1.png
+  2.jpg
+  3.png
 
-```javascript
-const assetPairs = [
-    { background: 'waterfall.png', music: 'uwasotemperate.mp3' },
-    { background: 'castleTown.png', music: 'myCastleTown.mp3' },
-    { background: 'your-image.png', music: 'your-music.mp3' },
-    { background: 'silent-bg.jpg', music: null }, // no music for this one
-];
+music/
+  1.mp3
+  2.mp3
+  3.ogg
 ```
 
-Each time the loading screen appears, one pair is randomly selected and both the background and music from that pair are used together.
+- Files are automatically paired by number (1.png + 1.mp3, 2.jpg + 2.mp3, etc.)
+- **Supported background formats:** png, jpg, jpeg, gif, webp
+- **Supported music formats:** mp3, ogg, wav
+- Numbers 1-20 are supported
+- Music is optional - a background without matching music will play silently
+- For mini-game music, add a file called `game.mp3` to the music folder
 
-## Default Pairs
+Each time the loading screen appears, one pair is randomly selected.
 
-- `waterfall.png` + `uwasotemperate.mp3`
-- `castleTown.png` + `myCastleTown.mp3`
+## Suggested Sources for Free Assets
+
+- **Music:** [Incompetech](https://incompetech.com/), [Freesound](https://freesound.org/), [OpenGameArt](https://opengameart.org/)
+- **Backgrounds:** [Unsplash](https://unsplash.com/), [Pexels](https://www.pexels.com/), [OpenGameArt](https://opengameart.org/)
 
 ## Default Behavior
 
-If no asset pairs are configured (empty array):
-- A gradient background (Undertale-inspired dark blue theme) will be shown
-- No music will play (silent operation)
+If no assets are present:
+- A gradient background will be shown
+- No music will play
+- The loading screen still works with fun facts and mini-games!

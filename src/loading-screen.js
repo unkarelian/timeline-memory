@@ -6,6 +6,7 @@
 
 import { getExtensionAssetPath } from '../index.js';
 import { createGamePanel, showGamePanel, hideGamePanel, cleanupGames, setGameCallbacks } from './loading-games.js';
+import { loadTutorialTranslations, getLocalizedFunFacts } from './locales.js';
 
 // State
 let loadingOverlay = null;
@@ -18,8 +19,8 @@ let currentQuoteIndex = 0;
 const QUOTE_ROTATION_INTERVAL = 8000; // 8 seconds
 const AUDIO_FADE_DURATION = 1000; // 1 second fade
 
-// Fun facts array
-const funFacts = [
+// Fun facts array (English defaults, localized at runtime)
+const funFactsEnglish = [
     "The first computer bug was an actual moth found in a relay.",
     "Honey never spoils. Archaeologists found 3000-year-old honey that was still edible.",
     "Octopuses have three hearts and blue blood.",
@@ -41,6 +42,9 @@ const funFacts = [
     "The dot over the letters 'i' and 'j' is called a 'tittle'.",
 ];
 
+// Localized fun facts (populated when loading screen is shown)
+let localizedFunFacts = null;
+
 // Mode display names
 const modeDisplayNames = {
     'timeline-fill': 'Timeline Retrieval',
@@ -48,25 +52,92 @@ const modeDisplayNames = {
     'lore-management': 'Lore Management',
 };
 
-/**
- * Paired background and music assets.
- * Each pair is selected together when the loading screen appears.
- * Edit this array to add your own background/music combinations.
- *
- * background: filename in assets/backgrounds/ (png, jpg, jpeg, gif, webp)
- * music: filename in assets/music/ (mp3, ogg, wav) - can be null for no music
- */
-const assetPairs = [
-    { background: 'waterfall.png', music: 'uwasotemperate.mp3' },
-    { background: 'castleTown.png', music: 'myCastleTown.mp3' },
-    { background: 'fireplace.png', music: 'fireplace.mp3' },
-    // Add more pairs here:
-    // { background: 'your-image.png', music: 'your-music.mp3' },
-    // { background: 'silent-bg.jpg', music: null }, // no music for this one
-];
+// Asset configuration
+const BG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+const MUSIC_EXTENSIONS = ['mp3', 'ogg', 'wav'];
+const MAX_ASSET_PAIRS = 20; // Max numbered pairs to check (1-20)
+
+// Dynamically discovered asset pairs (cached after first scan)
+let assetPairs = null;
+let assetScanPromise = null;
 
 // Currently selected pair (set when loading screen is shown)
 let currentPair = null;
+
+/**
+ * Check if a file exists at the given URL
+ * @param {string} url - URL to check
+ * @returns {Promise<boolean>}
+ */
+async function fileExists(url) {
+    try {
+        const response = await fetch(url, { method: 'HEAD' });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Scan for numbered asset pairs (1.png/1.mp3, 2.png/2.mp3, etc.)
+ * Users can simply drop files named 1.png, 1.mp3, 2.png, 2.mp3, etc.
+ * @returns {Promise<Array>} Array of discovered asset pairs
+ */
+async function scanAssetPairs() {
+    const pairs = [];
+
+    for (let i = 1; i <= MAX_ASSET_PAIRS; i++) {
+        let bgFile = null;
+        let musicFile = null;
+
+        // Check for background with any supported extension
+        for (const ext of BG_EXTENSIONS) {
+            const url = getExtensionAssetPath(`assets/backgrounds/${i}.${ext}`);
+            if (await fileExists(url)) {
+                bgFile = `${i}.${ext}`;
+                break;
+            }
+        }
+
+        // Check for music with any supported extension
+        for (const ext of MUSIC_EXTENSIONS) {
+            const url = getExtensionAssetPath(`assets/music/${i}.${ext}`);
+            if (await fileExists(url)) {
+                musicFile = `${i}.${ext}`;
+                break;
+            }
+        }
+
+        // Add pair if we found at least a background
+        if (bgFile) {
+            pairs.push({ background: bgFile, music: musicFile });
+        }
+    }
+
+    return pairs;
+}
+
+/**
+ * Get asset pairs, scanning if needed (cached after first scan)
+ * @returns {Promise<Array>}
+ */
+async function getAssetPairs() {
+    if (assetPairs !== null) {
+        return assetPairs;
+    }
+
+    // Prevent multiple simultaneous scans
+    if (!assetScanPromise) {
+        assetScanPromise = scanAssetPairs().then(pairs => {
+            assetPairs = pairs;
+            assetScanPromise = null;
+            console.log(`[Timeline Memory] Found ${pairs.length} loading screen asset pair(s)`);
+            return pairs;
+        });
+    }
+
+    return assetScanPromise;
+}
 
 /**
  * Shuffle array using Fisher-Yates algorithm
@@ -85,12 +156,13 @@ function shuffleArray(array) {
 /**
  * Select a random asset pair for the current loading screen
  */
-function selectRandomPair() {
-    if (assetPairs.length === 0) {
+async function selectRandomPair() {
+    const pairs = await getAssetPairs();
+    if (pairs.length === 0) {
         currentPair = null;
         return;
     }
-    currentPair = assetPairs[Math.floor(Math.random() * assetPairs.length)];
+    currentPair = pairs[Math.floor(Math.random() * pairs.length)];
 }
 
 /**
@@ -122,7 +194,8 @@ function createLoadingOverlay(mode) {
     overlay.className = 'rmr-loading-screen-overlay';
 
     const modeText = modeDisplayNames[mode] || 'Processing';
-    const randomQuote = funFacts[Math.floor(Math.random() * funFacts.length)];
+    const facts = localizedFunFacts || funFactsEnglish;
+    const randomQuote = facts[Math.floor(Math.random() * facts.length)];
 
     overlay.innerHTML = `
         <div class="rmr-loading-screen-background"></div>
@@ -148,7 +221,8 @@ function createLoadingOverlay(mode) {
  * Start rotating quotes
  */
 function startQuoteRotation() {
-    const shuffledFacts = shuffleArray(funFacts);
+    const facts = localizedFunFacts || funFactsEnglish;
+    const shuffledFacts = shuffleArray(facts);
     currentQuoteIndex = 0;
 
     quoteInterval = setInterval(() => {
@@ -318,8 +392,12 @@ export async function showLoadingScreen(mode) {
     // Remove existing overlay if any
     hideLoadingScreen();
 
+    // Load translations and get localized fun facts
+    await loadTutorialTranslations();
+    localizedFunFacts = getLocalizedFunFacts(funFactsEnglish);
+
     // Select a random asset pair for this loading screen
-    selectRandomPair();
+    await selectRandomPair();
 
     // Create overlay
     loadingOverlay = createLoadingOverlay(mode);

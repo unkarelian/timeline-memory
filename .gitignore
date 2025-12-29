@@ -1,2 +1,8 @@
 CLAUDE.md
 .gitignore
+
+# User-added loading screen assets (not distributed due to licensing)
+assets/music/*
+assets/backgrounds/*
+!assets/music/.gitkeep
+!assets/backgrounds/.gitkeep

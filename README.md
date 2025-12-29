@@ -6,8 +6,11 @@ A SillyTavern extension for creating a timeline of summarized chapters from your
 
 - **Chapter Timeline**: Summarize chapters and track them in a linear timeline accessible via macros
 - **Arc Analyzer**: AI-powered detection of natural chapter endpoints in your chat
+- **Auto-Summarize**: Automatic chapter creation when message threshold is reached
 - **Timeline Fill**: Smart context retrieval that queries relevant chapters based on current conversation
 - **Agentic Timeline Fill**: Advanced tool-based retrieval where an AI agent dynamically queries chapters and lorebook
+- **Loading Screen**: Immersive fullscreen loading experience with ambient music, backgrounds, and fun facts
+- **Mini-Games**: Play Snake, Breakout, or Tetris while waiting for long operations
 - **Inject at Depth**: Automatic timeline injection into AI context without prompt editing
 - **Lore Management Mode**: Autonomous AI-driven lorebook editing based on story events
 - **Customizable Presets**: Save and share configurations for all workflow types
@@ -71,6 +74,23 @@ Click the **Stop button** on any message to manually end a chapter:
 3. The AI summarizes all messages from the previous chapter end to that message
 
 The button only appears if "End Chapter" is enabled in Message Buttons settings.
+
+#### Auto-Summarize
+
+Auto-Summarize automatically creates chapters when your chat reaches a certain length, without manual intervention.
+
+**How it works:**
+1. Set a **Threshold (N)** - the number of messages that must accumulate before triggering
+2. Set a **Buffer (X)** - recent messages to exclude from endpoint selection
+3. When messages since last chapter >= N + X, the AI selects an optimal endpoint
+4. A chapter is automatically created at that point
+
+**To enable:**
+1. Check "Enable Auto-Summarize"
+2. Select an **Auto-Summarize Profile** (must support function calls)
+3. Adjust Threshold and Buffer as needed (defaults: N=50, X=10)
+
+**Example:** With N=50 and X=10, when 60 messages accumulate since the last chapter, the AI will analyze messages 1-50 and select the best chapter endpoint.
 
 #### Viewing & Editing Summaries
 
@@ -189,6 +209,32 @@ The AI reads your story, identifies important lore (characters, locations, event
 - Update existing entries with new information
 - Set entries as "constant" (always active) or keyword-triggered
 - Delete entries when appropriate
+
+### Loading Screen
+
+During Timeline Fill, Agentic Timeline Fill, and Lore Management operations, a fullscreen loading screen appears with:
+
+- **Ambient backgrounds and music** - Customizable atmosphere while you wait
+- **Rotating fun facts** - Random trivia to keep you entertained
+- **Abort button** - Cancel the operation at any time
+
+**Customizing the loading screen:**
+
+Add your own backgrounds and music by placing numbered files in the assets folder:
+- `assets/backgrounds/1.png`, `2.jpg`, `3.png`, etc.
+- `assets/music/1.mp3`, `2.mp3`, `3.ogg`, etc.
+
+Files are automatically paired by number. See `assets/README.md` for details.
+
+### Mini-Games
+
+While waiting for long operations, you can play retro-style mini-games:
+
+- **Snake** - Classic snake game with arrow keys or WASD
+- **Breakout** - Brick-breaking paddle game
+- **Tetris** - The timeless puzzle game
+
+Games appear in a sidebar during loading. Add `assets/music/game.mp3` for game music.
 
 ### AI Tool Calls
 
@@ -309,6 +355,7 @@ Each workflow type has configurable system and user prompts with macro support.
 | v1.8 | Usability update: tutorial mode, timeline-fill buttons, inject at depth, progress bar |
 | v1.9 | Query limits for chapters per query and timeline fill queries, Spanish localization |
 | v2.0 | **Agentic Timeline Fill**: Advanced tool-based retrieval mode with dynamic chapter querying and lorebook access |
+| v2.5 | **Auto-Summarize**: Automatic chapter creation at message thresholds. **Loading Screen**: Immersive fullscreen experience with ambient music/backgrounds and fun facts. **Mini-Games**: Snake, Breakout, and Tetris playable during loading |
 
 ## Support
 

@@ -4,6 +4,7 @@
  */
 
 import { getExtensionAssetPath } from '../index.js';
+import { getTutorialText } from './locales.js';
 
 // Callbacks for loading screen music control (set by loading-screen.js to avoid circular dependency)
 let onGameStart = null;
@@ -33,7 +34,7 @@ let touchEndHandler = null;
 let gameAudio = null;
 
 // Audio configuration
-const GAME_MUSIC = 'assets/music/airWaves.mp3';
+const GAME_MUSIC = 'assets/music/game.mp3';
 const AUDIO_FADE_DURATION = 500;
 
 // Retro color palette
@@ -60,26 +61,37 @@ const GAMES = {
         icon: '🐍',
         width: 240,
         height: 240,
-        controls: '← → ↑ ↓ or WASD',
-        touchControls: 'Swipe to move, tap to restart',
+        controlsKey: 'game_snake_controls',
+        controlsDefault: '← → ↑ ↓ or WASD',
+        touchControlsKey: 'game_snake_touch',
+        touchControlsDefault: 'Swipe to move, tap to restart',
     },
     breakout: {
         name: 'Breakout',
         icon: '🧱',
         width: 240,
         height: 320,
-        controls: '← → or A/D',
-        touchControls: 'Touch & drag to move paddle',
+        controlsKey: 'game_breakout_controls',
+        controlsDefault: '← → or A/D',
+        touchControlsKey: 'game_breakout_touch',
+        touchControlsDefault: 'Touch & drag to move paddle',
     },
     tetris: {
         name: 'Tetris',
         icon: '🟦',
         width: 200,
         height: 400,
-        controls: '← → ↓ / ↑ to rotate',
-        touchControls: 'Swipe ←→ move, ↑ rotate, tap drop',
+        controlsKey: 'game_tetris_controls',
+        controlsDefault: '← → ↓ / ↑ to rotate',
+        touchControlsKey: 'game_tetris_touch',
+        touchControlsDefault: 'Swipe ←→ move, ↑ rotate, tap drop',
     },
 };
+
+// Localized game strings (populated at runtime)
+function getGameString(key, fallback) {
+    return getTutorialText(key, fallback);
+}
 
 /**
  * Check if device supports touch
@@ -271,12 +283,12 @@ class SnakeGame {
             ctx.fillStyle = COLORS.red;
             ctx.font = '16px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 10);
+            ctx.fillText(getGameString('game_over', 'GAME OVER'), this.canvas.width / 2, this.canvas.height / 2 - 10);
 
             ctx.fillStyle = COLORS.white;
             ctx.font = '12px monospace';
-            ctx.fillText(`Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
-            ctx.fillText('Press ENTER to restart', this.canvas.width / 2, this.canvas.height / 2 + 30);
+            ctx.fillText(`${getGameString('game_score', 'Score')}: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
+            ctx.fillText(getGameString('game_restart', 'Press ENTER to restart'), this.canvas.width / 2, this.canvas.height / 2 + 30);
         }
     }
 
@@ -492,7 +504,7 @@ class BreakoutGame {
         ctx.fillStyle = COLORS.white;
         ctx.font = '10px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(`Lives: ${this.lives}`, 5, 15);
+        ctx.fillText(`${getGameString('game_lives', 'Lives')}: ${this.lives}`, 5, 15);
 
         // Game over / Won
         if (this.gameOver || this.won) {
@@ -502,12 +514,13 @@ class BreakoutGame {
             ctx.fillStyle = this.won ? COLORS.green : COLORS.red;
             ctx.font = '16px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(this.won ? 'YOU WIN!' : 'GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 10);
+            const endText = this.won ? getGameString('game_win', 'YOU WIN!') : getGameString('game_over', 'GAME OVER');
+            ctx.fillText(endText, this.canvas.width / 2, this.canvas.height / 2 - 10);
 
             ctx.fillStyle = COLORS.white;
             ctx.font = '12px monospace';
-            ctx.fillText(`Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
-            ctx.fillText('Press ENTER to restart', this.canvas.width / 2, this.canvas.height / 2 + 30);
+            ctx.fillText(`${getGameString('game_score', 'Score')}: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
+            ctx.fillText(getGameString('game_restart', 'Press ENTER to restart'), this.canvas.width / 2, this.canvas.height / 2 + 30);
         }
     }
 
@@ -793,12 +806,12 @@ class TetrisGame {
             ctx.fillStyle = COLORS.red;
             ctx.font = '16px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 10);
+            ctx.fillText(getGameString('game_over', 'GAME OVER'), this.canvas.width / 2, this.canvas.height / 2 - 10);
 
             ctx.fillStyle = COLORS.white;
             ctx.font = '12px monospace';
-            ctx.fillText(`Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
-            ctx.fillText('Press ENTER to restart', this.canvas.width / 2, this.canvas.height / 2 + 30);
+            ctx.fillText(`${getGameString('game_score', 'Score')}: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
+            ctx.fillText(getGameString('game_restart', 'Press ENTER to restart'), this.canvas.width / 2, this.canvas.height / 2 + 30);
         }
     }
 
@@ -887,6 +900,10 @@ export function createGamePanel() {
     gamePanel.id = 'rmr-games-sidebar';
     console.log('[Timeline Memory] Created game panel element');
 
+    const closeText = getGameString('game_close', 'Close');
+    const scoreText = getGameString('game_score', 'Score');
+    const loadingCompleteText = getGameString('game_loading_complete', 'Loading Complete!');
+
     gamePanel.innerHTML = `
         <div class="rmr-games-icons">
             <button class="rmr-game-btn" data-game="snake" title="Snake">🐍</button>
@@ -896,14 +913,14 @@ export function createGamePanel() {
         <div class="rmr-games-canvas-container" style="display: none;">
             <div class="rmr-games-header">
                 <span class="rmr-games-title">Game</span>
-                <button class="rmr-games-close" title="Close">✕</button>
+                <button class="rmr-games-close" title="${closeText}">✕</button>
             </div>
             <canvas id="rmr-game-canvas"></canvas>
-            <div class="rmr-games-score">Score: 0</div>
+            <div class="rmr-games-score">${scoreText}: 0</div>
             <div class="rmr-games-controls">Controls</div>
         </div>
         <div class="rmr-games-complete-overlay" style="display: none;">
-            <span>Loading Complete!</span>
+            <span>${loadingCompleteText}</span>
         </div>
     `;
 
@@ -1046,7 +1063,9 @@ function startGame(gameName) {
     container.style.display = 'block';
     gamePanel.querySelector('.rmr-games-title').textContent = config.name;
     // Show touch controls on touch devices, keyboard controls otherwise
-    const controlsText = isTouchDevice() ? config.touchControls : config.controls;
+    const controlsText = isTouchDevice()
+        ? getGameString(config.touchControlsKey, config.touchControlsDefault)
+        : getGameString(config.controlsKey, config.controlsDefault);
     gamePanel.querySelector('.rmr-games-controls').textContent = controlsText;
 
     // Mobile: make the game fullscreen
@@ -1266,7 +1285,8 @@ function gameLoop(timestamp) {
     if (gamePanel) {
         const scoreEl = gamePanel.querySelector('.rmr-games-score');
         if (scoreEl) {
-            scoreEl.textContent = `Score: ${activeGame.getScore()}`;
+            const scoreLabel = getGameString('game_score', 'Score');
+            scoreEl.textContent = `${scoreLabel}: ${activeGame.getScore()}`;
         }
     }
 

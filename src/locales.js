@@ -128,3 +128,19 @@ export function hasTranslations() {
 export function getLocale() {
     return currentLocale || getCurrentLocale() || 'en';
 }
+
+/**
+ * Get localized fun facts for the loading screen
+ * @param {string[]} englishFacts - Array of English fun facts as fallback
+ * @returns {string[]} Array of localized fun facts
+ */
+export function getLocalizedFunFacts(englishFacts) {
+    if (!tutorialTranslations) {
+        return englishFacts;
+    }
+
+    return englishFacts.map((fact, index) => {
+        const key = `fun_fact_${index + 1}`;
+        return tutorialTranslations[key] || fact;
+    });
+}

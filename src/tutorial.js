@@ -144,6 +144,29 @@ The AI will then summarize everything from the start (or last chapter) to that p
 The button only appears if <i>"End Chapter"</i> is enabled in Message Buttons settings.`
     },
     {
+        id: 'auto-summarize',
+        titleKey: 'tutorial_auto_summarize_title',
+        titleDefault: 'Auto-Summarize - Hands-Free Chapters',
+        contentKey: 'tutorial_auto_summarize_content',
+        contentDefault: `<b>Auto-Summarize</b> automatically creates chapters when your chat reaches a certain length - no manual intervention needed!
+
+<b>How it works:</b>
+1. Set a <i>Threshold (N)</i> - messages that must accumulate before triggering
+2. Set a <i>Buffer (X)</i> - recent messages to exclude from endpoint selection
+3. When messages since last chapter ≥ N + X, the AI picks an optimal endpoint
+4. A chapter is automatically created at that point
+
+<b>To enable:</b>
+1. Check <i>"Enable Auto-Summarize"</i>
+2. Select an <i>Auto-Summarize Profile</i>
+3. Adjust Threshold and Buffer as needed
+
+<b>Example:</b> With N=50 and X=10, when 60 messages accumulate, the AI analyzes messages 1-50 and selects the best chapter endpoint.
+
+<i>Tip:</i> Great for long roleplay sessions where you don't want to manually manage chapters!`,
+        highlight: '#rmr_auto_summarize_enabled'
+    },
+    {
         id: 'summaries',
         titleKey: 'tutorial_summaries_title',
         titleDefault: 'Viewing & Editing Summaries',
