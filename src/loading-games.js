@@ -860,24 +860,34 @@ async function startGameMusic() {
 
 /**
  * Stop game music with fade out
+ * @param {boolean} immediate - If true, stop immediately without fade
  */
-function stopGameMusic() {
+function stopGameMusic(immediate = false) {
     if (!gameAudio) return;
+
+    if (immediate) {
+        gameAudio.pause();
+        gameAudio = null;
+        return;
+    }
 
     const fadeStep = 50;
     const volumeDecrement = gameAudio.volume / (AUDIO_FADE_DURATION / fadeStep);
+    const audioToStop = gameAudio;
 
     const fadeOut = setInterval(() => {
-        if (!gameAudio) {
+        if (!audioToStop || audioToStop !== gameAudio) {
             clearInterval(fadeOut);
             return;
         }
-        if (gameAudio.volume > 0.05) {
-            gameAudio.volume = Math.max(0, gameAudio.volume - volumeDecrement);
+        if (audioToStop.volume > 0.05) {
+            audioToStop.volume = Math.max(0, audioToStop.volume - volumeDecrement);
         } else {
             clearInterval(fadeOut);
-            gameAudio.pause();
-            gameAudio = null;
+            audioToStop.pause();
+            if (gameAudio === audioToStop) {
+                gameAudio = null;
+            }
         }
     }, fadeStep);
 }
@@ -928,6 +938,8 @@ export function createGamePanel() {
     gamePanel.querySelectorAll('.rmr-game-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const gameName = btn.dataset.game;
+            // Remove focus from button to prevent Enter key from re-triggering it
+            btn.blur();
             startGame(gameName);
         });
     });
@@ -1049,8 +1061,9 @@ function startGame(gameName) {
     const config = GAMES[gameName];
     if (!config) return;
 
-    // Close any existing game
-    closeGame();
+    // Close any existing game WITHOUT resuming loading music
+    // (we're switching games, not going back to loading screen)
+    closeGame(false, false);
 
     // Set up canvas
     const container = gamePanel.querySelector('.rmr-games-canvas-container');
@@ -1142,9 +1155,11 @@ function startGame(gameName) {
     // Set up keyboard handlers
     keydownHandler = (e) => {
         if (!activeGame) return;
-        // Prevent default for arrow keys to avoid scrolling
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        // Prevent default for game keys to avoid scrolling and button activation
+        // IMPORTANT: Include Enter and Space to prevent them from clicking focused buttons
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
             e.preventDefault();
+            e.stopPropagation();
         }
         if (activeGame.handleKeyDown) {
             activeGame.handleKeyDown(e.key);
@@ -1193,15 +1208,20 @@ function startGame(gameName) {
 
 /**
  * Close the current game
+ * @param {boolean} immediate - If true, stop audio immediately without fade
+ * @param {boolean} resumeLoadingAudio - If true, resume loading music after closing (default true)
  */
-function closeGame() {
+function closeGame(immediate = false, resumeLoadingAudio = true) {
     // Only do cleanup if a game was actually active
     const wasGameActive = activeGame !== null;
 
     if (wasGameActive) {
-        // Stop game music and resume loading screen music
-        stopGameMusic();
-        if (onGameEnd) onGameEnd();
+        // Stop game music (immediately if specified, e.g., during loading screen cleanup)
+        stopGameMusic(immediate);
+        // Only try to resume loading music if:
+        // 1. resumeLoadingAudio is true (not switching to another game)
+        // 2. callback is set (loading screen is still active)
+        if (resumeLoadingAudio && onGameEnd) onGameEnd();
     }
 
     if (animationFrame) {
@@ -1297,7 +1317,9 @@ function gameLoop(timestamp) {
  * Clean up all game resources
  */
 export function cleanupGames() {
-    closeGame();
+    // Use immediate=true to stop audio instantly during cleanup
+    // Don't resume loading music (loading screen is ending)
+    closeGame(true, false);
 
     // Also check for orphaned container in body (mobile fullscreen)
     const orphanedContainer = document.body.querySelector('.rmr-games-canvas-container');

@@ -14,6 +14,7 @@ let audioElement = null;
 let quoteInterval = null;
 let abortCallback = null;
 let currentQuoteIndex = 0;
+let isLoadingScreenShowing = false; // Track if loading screen is active (guards audio operations)
 
 // Configuration
 const QUOTE_ROTATION_INTERVAL = 8000; // 8 seconds
@@ -291,21 +292,24 @@ async function startMusic(musicUrl) {
  * Pause music (for when games are playing)
  */
 export function pauseLoadingMusic() {
-    if (!audioElement) return;
+    // Only pause if loading screen is still active
+    if (!isLoadingScreenShowing || !audioElement) return;
 
     const fadeStep = 50;
     const volumeDecrement = audioElement.volume / (AUDIO_FADE_DURATION / fadeStep);
+    const audioToPause = audioElement;
 
     const fadeOut = setInterval(() => {
-        if (!audioElement) {
+        // Stop fade if loading screen ended or audio was cleared
+        if (!isLoadingScreenShowing || !audioToPause || audioToPause !== audioElement) {
             clearInterval(fadeOut);
             return;
         }
-        if (audioElement.volume > 0.05) {
-            audioElement.volume = Math.max(0, audioElement.volume - volumeDecrement);
+        if (audioToPause.volume > 0.05) {
+            audioToPause.volume = Math.max(0, audioToPause.volume - volumeDecrement);
         } else {
             clearInterval(fadeOut);
-            audioElement.pause();
+            audioToPause.pause();
         }
     }, fadeStep);
 }
@@ -314,14 +318,16 @@ export function pauseLoadingMusic() {
  * Resume music (when games stop)
  */
 export function resumeLoadingMusic() {
-    if (!audioElement) return;
+    // Only resume if loading screen is still active
+    if (!isLoadingScreenShowing || !audioElement) return;
 
     audioElement.play().then(() => {
         // Fade in
         const fadeStep = 50;
         const volumeIncrement = 1 / (AUDIO_FADE_DURATION / fadeStep);
         const fadeIn = setInterval(() => {
-            if (!audioElement) {
+            // Stop fade if loading screen ended or audio was cleared
+            if (!isLoadingScreenShowing || !audioElement) {
                 clearInterval(fadeIn);
                 return;
             }
@@ -338,24 +344,34 @@ export function resumeLoadingMusic() {
 
 /**
  * Stop music with fade out
+ * @param {boolean} immediate - If true, stop immediately without fade
  */
-function stopMusic() {
+function stopMusic(immediate = false) {
     if (!audioElement) return;
+
+    if (immediate) {
+        audioElement.pause();
+        audioElement = null;
+        return;
+    }
 
     const fadeStep = 50;
     const volumeDecrement = audioElement.volume / (AUDIO_FADE_DURATION / fadeStep);
+    const audioToStop = audioElement;
 
     const fadeOut = setInterval(() => {
-        if (!audioElement) {
+        if (!audioToStop || audioToStop !== audioElement) {
             clearInterval(fadeOut);
             return;
         }
-        if (audioElement.volume > 0.05) {
-            audioElement.volume = Math.max(0, audioElement.volume - volumeDecrement);
+        if (audioToStop.volume > 0.05) {
+            audioToStop.volume = Math.max(0, audioToStop.volume - volumeDecrement);
         } else {
             clearInterval(fadeOut);
-            audioElement.pause();
-            audioElement = null;
+            audioToStop.pause();
+            if (audioElement === audioToStop) {
+                audioElement = null;
+            }
         }
     }, fadeStep);
 }
@@ -391,6 +407,9 @@ export function setAbortCallback(callback) {
 export async function showLoadingScreen(mode) {
     // Remove existing overlay if any
     hideLoadingScreen();
+
+    // Mark loading screen as active (guards audio operations)
+    isLoadingScreenShowing = true;
 
     // Load translations and get localized fun facts
     await loadTutorialTranslations();
@@ -449,13 +468,20 @@ export async function showLoadingScreen(mode) {
  * Hide the loading screen
  */
 export function hideLoadingScreen() {
+    // Mark loading screen as inactive FIRST - this prevents any audio operations from running
+    isLoadingScreenShowing = false;
+
     if (!loadingOverlay) return;
 
     // Stop quote rotation
     stopQuoteRotation();
 
-    // Fade out music
-    stopMusic();
+    // Clear game callbacks BEFORE cleanup to prevent resumeLoadingMusic from being called
+    // This is critical - otherwise closeGame() would try to resume loading music during cleanup
+    setGameCallbacks(null, null);
+
+    // Stop music immediately to prevent any race conditions
+    stopMusic(true);
 
     // Hide games with "Loading Complete!" warning
     hideGamePanel(true);
@@ -483,5 +509,5 @@ export function hideLoadingScreen() {
  * @returns {boolean}
  */
 export function isLoadingScreenActive() {
-    return loadingOverlay !== null && loadingOverlay.classList.contains('active');
+    return isLoadingScreenShowing;
 }
