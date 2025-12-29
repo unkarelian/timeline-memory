@@ -2775,7 +2775,7 @@ export async function analyzeArcs(profileOverride = null, forceReanalyze = false
  * @returns {number} The last chapter end message ID, or 0 if no chapters exist
  */
 function getLastChapterEndId() {
-    const timeline = getTimelineData();
+    const timeline = getTimelineEntries();
     if (!timeline || timeline.length === 0) return 0;
     return timeline[timeline.length - 1].endMsgId;
 }

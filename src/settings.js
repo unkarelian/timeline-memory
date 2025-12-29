@@ -324,6 +324,7 @@ Return ONLY a JSON object with a single field:
 ## Rules
 - Select exactly ONE endpoint
 - The endpoint must be within the provided message range
+- ONLY select assistant messages as endpoints (role: "assistant"), NEVER user messages
 - Choose the point that creates the most complete, self-contained chapter
 - Prefer later messages that still complete the arc (avoid cutting mid-beat)`,
 	"auto_summarize_prompt_template": `# Message Range for Auto-Summarize
