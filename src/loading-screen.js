@@ -5,6 +5,7 @@
  */
 
 import { getExtensionAssetPath } from '../index.js';
+import { createGamePanel, showGamePanel, hideGamePanel, cleanupGames } from './loading-games.js';
 
 // State
 let loadingOverlay = null;
@@ -213,6 +214,55 @@ async function startMusic(musicUrl) {
 }
 
 /**
+ * Pause music (for when games are playing)
+ */
+export function pauseLoadingMusic() {
+    if (!audioElement) return;
+
+    const fadeStep = 50;
+    const volumeDecrement = audioElement.volume / (AUDIO_FADE_DURATION / fadeStep);
+
+    const fadeOut = setInterval(() => {
+        if (!audioElement) {
+            clearInterval(fadeOut);
+            return;
+        }
+        if (audioElement.volume > 0.05) {
+            audioElement.volume = Math.max(0, audioElement.volume - volumeDecrement);
+        } else {
+            clearInterval(fadeOut);
+            audioElement.pause();
+        }
+    }, fadeStep);
+}
+
+/**
+ * Resume music (when games stop)
+ */
+export function resumeLoadingMusic() {
+    if (!audioElement) return;
+
+    audioElement.play().then(() => {
+        // Fade in
+        const fadeStep = 50;
+        const volumeIncrement = 1 / (AUDIO_FADE_DURATION / fadeStep);
+        const fadeIn = setInterval(() => {
+            if (!audioElement) {
+                clearInterval(fadeIn);
+                return;
+            }
+            if (audioElement.volume < 0.5) {
+                audioElement.volume = Math.min(0.5, audioElement.volume + volumeIncrement);
+            } else {
+                clearInterval(fadeIn);
+            }
+        }, fadeStep);
+    }).catch(() => {
+        // Ignore play errors
+    });
+}
+
+/**
  * Stop music with fade out
  */
 function stopMusic() {
@@ -310,6 +360,10 @@ export async function showLoadingScreen(mode) {
     if (musicUrl) {
         startMusic(musicUrl);
     }
+
+    // Create and show games sidebar
+    createGamePanel();
+    showGamePanel();
 }
 
 /**
@@ -324,17 +378,22 @@ export function hideLoadingScreen() {
     // Fade out music
     stopMusic();
 
+    // Hide games with "Loading Complete!" warning
+    hideGamePanel(true);
+
     // Fade out overlay
     loadingOverlay.classList.remove('active');
     loadingOverlay.classList.add('hiding');
 
-    // Remove after animation
+    // Remove after animation (slightly longer to allow game warning to show)
     const overlayToRemove = loadingOverlay;
     setTimeout(() => {
         if (overlayToRemove && overlayToRemove.parentNode) {
             overlayToRemove.parentNode.removeChild(overlayToRemove);
         }
-    }, 500);
+        // Clean up games after overlay is removed
+        cleanupGames();
+    }, 1600);
 
     loadingOverlay = null;
     abortCallback = null;

@@ -933,3 +933,199 @@
     padding: 10px 20px;
   }
 }
+
+/* ============================================
+   Loading Screen Mini-Games
+   ============================================ */
+
+#rmr-games-sidebar {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10002;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.rmr-games-icons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rmr-game-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  font-size: 26px;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.rmr-game-btn:hover {
+  transform: scale(1.1);
+  border-color: rgba(0, 255, 0, 0.6);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+}
+
+.rmr-game-btn:active {
+  transform: scale(0.95);
+}
+
+.rmr-games-canvas-container {
+  background: #000;
+  border: 4px solid #222;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(0, 255, 0, 0.05);
+  position: relative;
+}
+
+.rmr-games-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.rmr-games-title {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  color: #0f0;
+  text-shadow: 0 0 8px #0f0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.rmr-games-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(255, 0, 0, 0.3);
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rmr-games-close:hover {
+  background: rgba(255, 0, 0, 0.6);
+}
+
+#rmr-game-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 2px solid #333;
+  border-radius: 4px;
+}
+
+.rmr-games-score {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #0f0;
+  text-shadow: 0 0 5px #0f0;
+  margin-top: 8px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.rmr-games-controls {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* Loading complete overlay */
+.rmr-games-complete-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+.rmr-games-complete-overlay span {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: bold;
+  color: #0f0;
+  text-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  animation: rmr-complete-flash 0.4s ease-in-out infinite;
+}
+
+@keyframes rmr-complete-flash {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
+  }
+  50% {
+    opacity: 0.7;
+    text-shadow: 0 0 5px #0f0;
+  }
+}
+
+/* Scanline effect for retro feel */
+.rmr-games-canvas-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.1) 0px,
+    rgba(0, 0, 0, 0.1) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  border-radius: 12px;
+}
+
+/* Hide games on mobile (requires keyboard) */
+@media (max-width: 900px) {
+  #rmr-games-sidebar {
+    display: none;
+  }
+}
+
+/* Adjust position on smaller desktop screens */
+@media (max-width: 1200px) and (min-width: 901px) {
+  #rmr-games-sidebar {
+    right: 10px;
+  }
+
+  .rmr-game-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+  }
+}
