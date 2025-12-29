@@ -4,7 +4,20 @@
  */
 
 import { getExtensionAssetPath } from '../index.js';
-import { pauseLoadingMusic, resumeLoadingMusic } from './loading-screen.js';
+
+// Callbacks for loading screen music control (set by loading-screen.js to avoid circular dependency)
+let onGameStart = null;
+let onGameEnd = null;
+
+/**
+ * Set callbacks for game start/end events
+ * @param {Function} startCallback - Called when a game starts (to pause loading music)
+ * @param {Function} endCallback - Called when a game ends (to resume loading music)
+ */
+export function setGameCallbacks(startCallback, endCallback) {
+    onGameStart = startCallback;
+    onGameEnd = endCallback;
+}
 
 // State
 let gamePanel = null;
@@ -14,6 +27,9 @@ let gameCtx = null;
 let animationFrame = null;
 let keydownHandler = null;
 let keyupHandler = null;
+let touchStartHandler = null;
+let touchMoveHandler = null;
+let touchEndHandler = null;
 let gameAudio = null;
 
 // Audio configuration
@@ -45,6 +61,7 @@ const GAMES = {
         width: 240,
         height: 240,
         controls: '← → ↑ ↓ or WASD',
+        touchControls: 'Swipe to move, tap to restart',
     },
     breakout: {
         name: 'Breakout',
@@ -52,6 +69,7 @@ const GAMES = {
         width: 240,
         height: 320,
         controls: '← → or A/D',
+        touchControls: 'Touch & drag to move paddle',
     },
     tetris: {
         name: 'Tetris',
@@ -59,8 +77,16 @@ const GAMES = {
         width: 200,
         height: 400,
         controls: '← → ↓ / ↑ to rotate',
+        touchControls: 'Swipe ←→ move, ↑ rotate, tap drop',
     },
 };
+
+/**
+ * Check if device supports touch
+ */
+function isTouchDevice() {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
 
 // ============================================
 // Snake Game
@@ -126,6 +152,44 @@ class SnakeGame {
                 this.nextDirection = newDir;
             }
         }
+    }
+
+    // Touch controls - swipe detection
+    handleTouchStart(e) {
+        const touch = e.touches[0];
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+    }
+
+    handleTouchEnd(e) {
+        if (this.touchStartX === undefined) return;
+
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - this.touchStartX;
+        const dy = touch.clientY - this.touchStartY;
+        const minSwipe = 30;
+
+        // Tap to restart on game over
+        if (this.gameOver && Math.abs(dx) < minSwipe && Math.abs(dy) < minSwipe) {
+            this.reset();
+            return;
+        }
+
+        // Determine swipe direction
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Horizontal swipe
+            if (Math.abs(dx) > minSwipe) {
+                this.handleInput(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+            }
+        } else {
+            // Vertical swipe
+            if (Math.abs(dy) > minSwipe) {
+                this.handleInput(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+            }
+        }
+
+        this.touchStartX = undefined;
+        this.touchStartY = undefined;
     }
 
     update(timestamp) {
@@ -293,6 +357,32 @@ class BreakoutGame {
             this.paddleMoving = 0;
         } else if ((key === 'ArrowRight' || key === 'd' || key === 'D') && this.paddleMoving === 1) {
             this.paddleMoving = 0;
+        }
+    }
+
+    // Touch controls - move paddle to touch position
+    handleTouchStart(e) {
+        e.preventDefault();
+        this.handleTouchMove(e);
+    }
+
+    handleTouchMove(e) {
+        e.preventDefault();
+        if (this.gameOver || this.won) return;
+
+        const touch = e.touches[0];
+        const rect = this.canvas.getBoundingClientRect();
+        const touchX = touch.clientX - rect.left;
+
+        // Move paddle center to touch position
+        this.paddleX = touchX - this.paddleWidth / 2;
+        this.paddleX = Math.max(0, Math.min(this.canvas.width - this.paddleWidth, this.paddleX));
+    }
+
+    handleTouchEnd(e) {
+        // Tap to restart on game over
+        if (this.gameOver || this.won) {
+            this.reset();
         }
     }
 
@@ -588,6 +678,56 @@ class TetrisGame {
         }
     }
 
+    // Touch controls - swipe gestures
+    handleTouchStart(e) {
+        const touch = e.touches[0];
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+        this.touchStartTime = Date.now();
+    }
+
+    handleTouchEnd(e) {
+        if (this.touchStartX === undefined) return;
+
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - this.touchStartX;
+        const dy = touch.clientY - this.touchStartY;
+        const dt = Date.now() - this.touchStartTime;
+        const minSwipe = 30;
+
+        // Tap to restart on game over, or hard drop during game
+        if (Math.abs(dx) < minSwipe && Math.abs(dy) < minSwipe) {
+            if (this.gameOver) {
+                this.reset();
+            } else if (dt < 200) {
+                // Quick tap = hard drop
+                this.hardDrop();
+            }
+            this.touchStartX = undefined;
+            return;
+        }
+
+        // Determine swipe direction
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Horizontal swipe - move piece
+            if (Math.abs(dx) > minSwipe) {
+                this.movePiece(dx > 0 ? 1 : -1);
+            }
+        } else {
+            // Vertical swipe
+            if (dy > minSwipe) {
+                // Swipe down - soft drop
+                this.dropPiece();
+            } else if (dy < -minSwipe) {
+                // Swipe up - rotate
+                this.rotatePiece();
+            }
+        }
+
+        this.touchStartX = undefined;
+        this.touchStartY = undefined;
+    }
+
     update(timestamp) {
         if (this.gameOver) return;
 
@@ -737,10 +877,15 @@ function stopGameMusic() {
  * Create the games sidebar panel
  */
 export function createGamePanel() {
-    if (gamePanel) return;
+    console.log('[Timeline Memory] createGamePanel called');
+    if (gamePanel) {
+        console.log('[Timeline Memory] Game panel already exists');
+        return;
+    }
 
     gamePanel = document.createElement('div');
     gamePanel.id = 'rmr-games-sidebar';
+    console.log('[Timeline Memory] Created game panel element');
 
     gamePanel.innerHTML = `
         <div class="rmr-games-icons">
@@ -776,14 +921,78 @@ export function createGamePanel() {
     });
 
     document.body.appendChild(gamePanel);
+    console.log('[Timeline Memory] Game panel appended to body');
 }
 
 /**
  * Show the games panel
  */
 export function showGamePanel() {
+    console.log('[Timeline Memory] showGamePanel called, gamePanel exists:', !!gamePanel);
     if (gamePanel) {
-        gamePanel.style.display = 'flex';
+        // Check if mobile (narrow viewport)
+        const isMobile = window.innerWidth <= 900;
+        console.log('[Timeline Memory] Is mobile:', isMobile, 'window width:', window.innerWidth);
+
+        // Apply all positioning inline to bypass CSS media query issues
+        gamePanel.style.setProperty('display', 'flex', 'important');
+        gamePanel.style.setProperty('visibility', 'visible', 'important');
+        gamePanel.style.setProperty('opacity', '1', 'important');
+        gamePanel.style.setProperty('position', 'fixed', 'important');
+        gamePanel.style.setProperty('z-index', '100000', 'important');
+        gamePanel.style.setProperty('pointer-events', 'auto', 'important');
+
+        if (isMobile) {
+            // Mobile: center at bottom
+            // Calculate explicit top position based on viewport
+            const viewportHeight = window.innerHeight;
+            const bottomOffset = 100;
+            const estimatedHeight = 100; // Approximate height of the panel
+            const topPosition = viewportHeight - bottomOffset - estimatedHeight;
+
+            // Use explicit top position instead of bottom (bottom doesn't reliably override CSS top: 50%)
+            gamePanel.style.setProperty('top', `${topPosition}px`, 'important');
+            gamePanel.style.setProperty('bottom', 'unset', 'important');
+            gamePanel.style.setProperty('left', '50%', 'important');
+            gamePanel.style.setProperty('right', 'unset', 'important');
+            gamePanel.style.setProperty('transform', 'translateX(-50%)', 'important');
+            gamePanel.style.setProperty('flex-direction', 'column', 'important');
+            gamePanel.style.setProperty('align-items', 'center', 'important');
+
+            // Style the icons container for mobile - larger and more prominent
+            const iconsContainer = gamePanel.querySelector('.rmr-games-icons');
+            if (iconsContainer) {
+                iconsContainer.style.setProperty('display', 'flex', 'important');
+                iconsContainer.style.setProperty('flex-direction', 'row', 'important');
+                iconsContainer.style.setProperty('gap', '20px', 'important');
+                iconsContainer.style.setProperty('background', 'rgba(20, 20, 30, 0.95)', 'important');
+                iconsContainer.style.setProperty('padding', '16px 24px', 'important');
+                iconsContainer.style.setProperty('border-radius', '20px', 'important');
+                iconsContainer.style.setProperty('border', '3px solid rgba(0, 255, 0, 0.5)', 'important');
+                iconsContainer.style.setProperty('box-shadow', '0 6px 24px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 255, 0, 0.3)', 'important');
+            }
+
+            // Style buttons for mobile - much larger for easy tapping
+            gamePanel.querySelectorAll('.rmr-game-btn').forEach(btn => {
+                btn.style.setProperty('width', '80px', 'important');
+                btn.style.setProperty('height', '80px', 'important');
+                btn.style.setProperty('font-size', '42px', 'important');
+                btn.style.setProperty('border-radius', '16px', 'important');
+                btn.style.setProperty('background', 'rgba(0, 0, 0, 0.9)', 'important');
+                btn.style.setProperty('border', '2px solid rgba(0, 255, 0, 0.6)', 'important');
+            });
+        } else {
+            // Desktop: right side vertically centered
+            gamePanel.style.setProperty('top', '50%', 'important');
+            gamePanel.style.setProperty('bottom', 'auto', 'important');
+            gamePanel.style.setProperty('right', '20px', 'important');
+            gamePanel.style.setProperty('left', 'auto', 'important');
+            gamePanel.style.setProperty('transform', 'translateY(-50%)', 'important');
+            gamePanel.style.setProperty('flex-direction', 'row', 'important');
+            gamePanel.style.setProperty('align-items', 'center', 'important');
+        }
+
+        console.log('[Timeline Memory] Game panel positioned for', isMobile ? 'mobile' : 'desktop');
     }
 }
 
@@ -802,12 +1011,16 @@ export function hideGamePanel(showWarning = false) {
         // Hide after animation
         setTimeout(() => {
             cleanupGames();
-            gamePanel.style.display = 'none';
+            if (gamePanel) {
+                gamePanel.style.setProperty('display', 'none', 'important');
+            }
             overlay.style.display = 'none';
         }, 1500);
     } else {
         cleanupGames();
-        gamePanel.style.display = 'none';
+        if (gamePanel) {
+            gamePanel.style.setProperty('display', 'none', 'important');
+        }
     }
 }
 
@@ -832,7 +1045,67 @@ function startGame(gameName) {
     // Update UI
     container.style.display = 'block';
     gamePanel.querySelector('.rmr-games-title').textContent = config.name;
-    gamePanel.querySelector('.rmr-games-controls').textContent = config.controls;
+    // Show touch controls on touch devices, keyboard controls otherwise
+    const controlsText = isTouchDevice() ? config.touchControls : config.controls;
+    gamePanel.querySelector('.rmr-games-controls').textContent = controlsText;
+
+    // Mobile: make the game fullscreen
+    const isMobile = window.innerWidth <= 900;
+    if (isMobile) {
+        // Move container to body to escape the transformed parent
+        // (transform on parent creates new containing block for fixed positioning)
+        document.body.appendChild(container);
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        container.style.cssText = `
+            position: fixed !important;
+            top: 0px !important;
+            left: 0px !important;
+            right: 0px !important;
+            bottom: 0px !important;
+            width: ${viewportWidth}px !important;
+            height: ${viewportHeight}px !important;
+            max-width: none !important;
+            max-height: none !important;
+            transform: none !important;
+            z-index: 100002 !important;
+            border-radius: 0 !important;
+            border: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 20px !important;
+            box-sizing: border-box !important;
+            background: #000 !important;
+            margin: 0 !important;
+        `;
+
+        // Scale the canvas to fit screen while maintaining aspect ratio
+        const availableWidth = viewportWidth - 40; // 20px padding on each side
+        const availableHeight = viewportHeight - 120; // Room for header, score, controls
+        const scaleX = availableWidth / config.width;
+        const scaleY = availableHeight / config.height;
+        const scale = Math.min(scaleX, scaleY);
+
+        gameCanvas.style.setProperty('width', `${Math.floor(config.width * scale)}px`, 'important');
+        gameCanvas.style.setProperty('height', `${Math.floor(config.height * scale)}px`, 'important');
+
+        // Larger text for mobile
+        container.querySelector('.rmr-games-title').style.setProperty('font-size', '20px', 'important');
+        container.querySelector('.rmr-games-score').style.setProperty('font-size', '18px', 'important');
+        container.querySelector('.rmr-games-controls').style.setProperty('font-size', '14px', 'important');
+
+        // Make close button more prominent
+        const closeBtn = container.querySelector('.rmr-games-close');
+        if (closeBtn) {
+            closeBtn.style.setProperty('width', '40px', 'important');
+            closeBtn.style.setProperty('height', '40px', 'important');
+            closeBtn.style.setProperty('font-size', '20px', 'important');
+        }
+    }
 
     // Create game instance
     switch (gameName) {
@@ -871,8 +1144,28 @@ function startGame(gameName) {
     document.addEventListener('keydown', keydownHandler);
     document.addEventListener('keyup', keyupHandler);
 
+    // Set up touch handlers
+    touchStartHandler = (e) => {
+        if (!activeGame || !activeGame.handleTouchStart) return;
+        activeGame.handleTouchStart(e);
+    };
+
+    touchMoveHandler = (e) => {
+        if (!activeGame || !activeGame.handleTouchMove) return;
+        activeGame.handleTouchMove(e);
+    };
+
+    touchEndHandler = (e) => {
+        if (!activeGame || !activeGame.handleTouchEnd) return;
+        activeGame.handleTouchEnd(e);
+    };
+
+    gameCanvas.addEventListener('touchstart', touchStartHandler, { passive: false });
+    gameCanvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
+    gameCanvas.addEventListener('touchend', touchEndHandler, { passive: false });
+
     // Pause loading screen music and start game music
-    pauseLoadingMusic();
+    if (onGameStart) onGameStart();
     startGameMusic();
 
     // Start game loop
@@ -889,7 +1182,7 @@ function closeGame() {
     if (wasGameActive) {
         // Stop game music and resume loading screen music
         stopGameMusic();
-        resumeLoadingMusic();
+        if (onGameEnd) onGameEnd();
     }
 
     if (animationFrame) {
@@ -907,13 +1200,55 @@ function closeGame() {
         keyupHandler = null;
     }
 
+    // Remove touch handlers
+    if (gameCanvas && touchStartHandler) {
+        gameCanvas.removeEventListener('touchstart', touchStartHandler);
+        touchStartHandler = null;
+    }
+    if (gameCanvas && touchMoveHandler) {
+        gameCanvas.removeEventListener('touchmove', touchMoveHandler);
+        touchMoveHandler = null;
+    }
+    if (gameCanvas && touchEndHandler) {
+        gameCanvas.removeEventListener('touchend', touchEndHandler);
+        touchEndHandler = null;
+    }
+
     activeGame = null;
 
     if (gamePanel) {
-        const container = gamePanel.querySelector('.rmr-games-canvas-container');
-        if (container) {
-            container.style.display = 'none';
+        // Find container - might be in body (mobile) or in gamePanel (desktop)
+        let container = gamePanel.querySelector('.rmr-games-canvas-container');
+        if (!container) {
+            container = document.body.querySelector('.rmr-games-canvas-container');
         }
+        if (container) {
+            // Move back to gamePanel if it was moved to body
+            if (container.parentElement === document.body) {
+                gamePanel.appendChild(container);
+            }
+            // Reset all inline styles
+            container.style.cssText = 'display: none;';
+        }
+        // Reset close button
+        const closeBtn = gamePanel.querySelector('.rmr-games-close');
+        if (closeBtn) {
+            closeBtn.style.removeProperty('width');
+            closeBtn.style.removeProperty('height');
+            closeBtn.style.removeProperty('font-size');
+        }
+        // Reset canvas size
+        if (gameCanvas) {
+            gameCanvas.style.removeProperty('width');
+            gameCanvas.style.removeProperty('height');
+        }
+        // Reset text sizes
+        const title = gamePanel.querySelector('.rmr-games-title');
+        const score = gamePanel.querySelector('.rmr-games-score');
+        const controls = gamePanel.querySelector('.rmr-games-controls');
+        if (title) title.style.removeProperty('font-size');
+        if (score) score.style.removeProperty('font-size');
+        if (controls) controls.style.removeProperty('font-size');
     }
 }
 
@@ -943,6 +1278,12 @@ function gameLoop(timestamp) {
  */
 export function cleanupGames() {
     closeGame();
+
+    // Also check for orphaned container in body (mobile fullscreen)
+    const orphanedContainer = document.body.querySelector('.rmr-games-canvas-container');
+    if (orphanedContainer) {
+        orphanedContainer.remove();
+    }
 
     if (gamePanel && gamePanel.parentNode) {
         gamePanel.parentNode.removeChild(gamePanel);

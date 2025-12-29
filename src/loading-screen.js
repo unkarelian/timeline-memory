@@ -5,7 +5,7 @@
  */
 
 import { getExtensionAssetPath } from '../index.js';
-import { createGamePanel, showGamePanel, hideGamePanel, cleanupGames } from './loading-games.js';
+import { createGamePanel, showGamePanel, hideGamePanel, cleanupGames, setGameCallbacks } from './loading-games.js';
 
 // State
 let loadingOverlay = null;
@@ -362,6 +362,7 @@ export async function showLoadingScreen(mode) {
     }
 
     // Create and show games sidebar
+    setGameCallbacks(pauseLoadingMusic, resumeLoadingMusic);
     createGamePanel();
     showGamePanel();
 }
