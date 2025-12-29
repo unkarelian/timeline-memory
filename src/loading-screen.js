@@ -498,10 +498,19 @@ export function hideLoadingScreen() {
         }
         // Clean up games after overlay is removed
         cleanupGames();
+
+        // Final safety check: ensure audio is completely stopped
+        // (in case any fade intervals restarted it)
+        if (audioElement) {
+            audioElement.pause();
+            audioElement = null;
+        }
     }, 1600);
 
     loadingOverlay = null;
     abortCallback = null;
+    currentPair = null;
+    localizedFunFacts = null;
 }
 
 /**

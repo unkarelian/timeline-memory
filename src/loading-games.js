@@ -1155,12 +1155,11 @@ function startGame(gameName) {
     // Set up keyboard handlers
     keydownHandler = (e) => {
         if (!activeGame) return;
-        // Prevent default for game keys to avoid scrolling and button activation
-        // IMPORTANT: Include Enter and Space to prevent them from clicking focused buttons
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+        // IMPORTANT: Stop ALL keyboard events from propagating to ST while game is active
+        // This prevents game inputs from triggering ST shortcuts or other handlers
+        e.preventDefault();
+        e.stopPropagation();
+
         if (activeGame.handleKeyDown) {
             activeGame.handleKeyDown(e.key);
         } else {
@@ -1170,6 +1169,8 @@ function startGame(gameName) {
 
     keyupHandler = (e) => {
         if (!activeGame) return;
+        // Stop propagation for keyup as well
+        e.stopPropagation();
         if (activeGame.handleKeyUp) {
             activeGame.handleKeyUp(e.key);
         }
@@ -1320,6 +1321,16 @@ export function cleanupGames() {
     // Use immediate=true to stop audio instantly during cleanup
     // Don't resume loading music (loading screen is ending)
     closeGame(true, false);
+
+    // Explicitly clear game audio reference (should already be null from closeGame, but ensure it)
+    if (gameAudio) {
+        gameAudio.pause();
+        gameAudio = null;
+    }
+
+    // Clear callbacks to prevent any lingering references
+    onGameStart = null;
+    onGameEnd = null;
 
     // Also check for orphaned container in body (mobile fullscreen)
     const orphanedContainer = document.body.querySelector('.rmr-games-canvas-container');
