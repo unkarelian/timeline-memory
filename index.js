@@ -196,7 +196,7 @@ function initQuickReplyButtons() {
 
 	// Keyboard shortcut: Shift+Enter to trigger Retrieve and Send
 	$('#send_textarea').on('keydown', (e) => {
-		if (e.shiftKey && e.key === 'Enter') {
+		if (settings.shift_enter_hotkey_enabled && e.shiftKey && e.key === 'Enter') {
 			e.preventDefault();
 			e.stopPropagation();
 			retrieveAndSendBtn.trigger('click');

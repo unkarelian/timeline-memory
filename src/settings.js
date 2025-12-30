@@ -23,6 +23,7 @@ const defaultSettings = {
 	"tools_enabled": true,
 	"quick_reply_buttons_location": "send_form", // "send_form" or "extensions_menu"
 	"loading_screen_enabled": false,
+	"shift_enter_hotkey_enabled": true, // enable Shift+Enter hotkey for Retrieve and Send
 	"show_buttons": [Buttons.STOP],
 	// prompt/text injection settings
 	"memory_system_prompt": `<role>You are a literary analysis expert specializing in narrative structure and scene summarization. Your expertise is in distilling complex narrative elements into concise, query-friendly summaries.</role>
@@ -593,6 +594,7 @@ async function loadSettingsUI() {
 		updateQuickReplyButtonsLocation();
 	});
 	$("#rmr_loading_screen_enabled").prop('checked', settings.loading_screen_enabled).on('click', toggleCheckboxSetting);
+	$("#rmr_shift_enter_hotkey_enabled").prop('checked', settings.shift_enter_hotkey_enabled).on('click', toggleCheckboxSetting);
 	// handle dropdowns
 	reloadProfiles();
 	$('#rmr_profile').on('input', () => {
@@ -1958,6 +1960,7 @@ function refreshSettingsUI() {
 	// Checkboxes
 	$('#rmr_tools_enabled').prop('checked', settings.tools_enabled);
 	$('#rmr_loading_screen_enabled').prop('checked', settings.loading_screen_enabled);
+	$('#rmr_shift_enter_hotkey_enabled').prop('checked', settings.shift_enter_hotkey_enabled);
 	// Dropdowns
 	$('#rmr_quick_reply_buttons_location').val(settings.quick_reply_buttons_location || 'send_form');
 	$('#rmr_hide_chapter').prop('checked', settings.hide_chapter);
