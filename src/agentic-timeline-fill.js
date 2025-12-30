@@ -310,7 +310,8 @@ async function endInformationRetrievalTool(finalInformation) {
     try {
         const { setTimelineFillResults } = await import('./memories.js');
         // Store as a single result with the final information
-        setTimelineFillResults([{
+        // IMPORTANT: await the save to ensure metadata is persisted before cleanup
+        await setTimelineFillResults([{
             mode: 'agentic',
             query: 'Agentic Timeline Fill Session',
             response: finalInformation || '',

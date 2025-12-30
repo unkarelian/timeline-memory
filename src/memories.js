@@ -240,29 +240,29 @@ export function getTimelineFillResults() {
 }
 
 // Save timeline fill results to chat metadata
-function saveTimelineFillResults() {
+async function saveTimelineFillResults() {
 	const context = getContext();
 	if (!context.chatMetadata) {
 		context.chatMetadata = {};
 	}
 	context.chatMetadata.timelineFillResults = timelineFillResults;
-	context.saveMetadata();
+	await context.saveMetadata();
 }
 
-export function setTimelineFillResults(results) {
+export async function setTimelineFillResults(results) {
 	if (Array.isArray(results)) {
 		timelineFillResults = [...results];
 	} else {
 		timelineFillResults = [];
 	}
-	saveTimelineFillResults();
+	await saveTimelineFillResults();
 	// Update injection prompt with new data
 	updateTimelineInjection();
 }
 
-export function resetTimelineFillResults() {
+export async function resetTimelineFillResults() {
 	timelineFillResults = [];
-	saveTimelineFillResults();
+	await saveTimelineFillResults();
 	// Update injection prompt with new data
 	updateTimelineInjection();
 }
@@ -1442,7 +1442,7 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 		const previousCommandArgs = commandArgs;
 		commandArgs = { ...(previousCommandArgs || {}), quiet };
 
-		setTimelineFillResults([]);
+		await setTimelineFillResults([]);
 
 		// Count total queries for progress tracking (excluding those that exceed the chapter limit)
 		const chapterLimit = settings.query_chapter_limit || 0;
@@ -1573,7 +1573,7 @@ export async function runTimelineFill({ profileOverride, quiet = true } = {}) {
 			commandArgs = previousCommandArgs;
 		}
 
-		setTimelineFillResults(aggregatedResults);
+		await setTimelineFillResults(aggregatedResults);
 		return aggregatedResults;
 	} catch (error) {
 		debug('Timeline fill failed:', error);
